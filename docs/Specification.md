@@ -6,15 +6,13 @@ A file begins with a cryptographic header, followed by one or more encrypted aut
 
 `header` `block0` `block1`...
 
-The header usually begins with a nonce of 12 bytes, followed by up to 16 authentication slots. This allows for up to 16 different passwords or up to 8 public key recipients (each takes two slots), or any combination of. The size of the header varies depending on the authentication methods used. In addition to the normal format, there are special cases for wide-open (no auth required), single password and single pubkey, making the header shorter in these frequently used modes.
+The header contains tokens neded for decrypting block0, given suitable authentication information. `ephpk` stores an ephemeral public key which is always recreated for each file, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (the first mode) or by stealing bytes off of `ephpk` (pubkey and multiple auth mode). There may be up to 20 recipients, each a shared password a public key.
 
 | Header format | Description |
 |:---|:---|
 | `nonce:12` | Single password `key = argon2(pw, nonce)` or wide-open `key = zeroes(32)`. |
 | `ephpk:32` | Single pubkey `key = sha512(nonce + ecdh(eph, peer))[:32]` |
 | `ephpk:32` `auth1:32` `auth2:32` ... | Multiple authentication methods (pubkeys and/or passwords). |
-
-`ephpk` stores an ephemeral public key which is always recreated for each file, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, in all modes.
 
 Note that the single pubkey and the multiple auth modes are actually the same, and need no separate implementation.
 
