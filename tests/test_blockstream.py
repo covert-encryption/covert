@@ -6,8 +6,8 @@ import pytest
 
 from covert.blockstream import BS, decrypt_file, encrypt_file
 
-AUTH = False, [b'justsomepassword'], []
-AUTH_DEC = ['justsomepassword'], []
+AUTH = False, ['justsomepassword'], [], []
+AUTH_DEC = ['justsomepassword'], [], []
 
 
 @pytest.mark.parametrize(
