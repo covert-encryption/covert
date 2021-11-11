@@ -4,7 +4,7 @@
 
 A file begins with a cryptographic header, followed by one or more encrypted authenticated blocks. The sole purpose of the header is to provide the keys needed to decrypt all the blocks where all remaining data is stored.
 
-`header` `block1` `block2`...
+`header` `block0` `block1`...
 
 The header usually begins with a nonce of 12 bytes, followed by up to 16 authentication slots. This allows for up to 16 different passwords or up to 8 public key recipients (each takes two slots), or any combination of. The size of the header varies depending on the authentication methods used. In addition to the normal format, there are special cases for wide-open (no auth required), single password and single pubkey, making the header shorter in these frequently used modes.
 
@@ -22,7 +22,7 @@ In the multiple authentication mode there are up to 19 *additional authenticatio
 
 Each block is encrypted and authenticated by chacha20-poly1305, using nonce and key derived from header. The first block is mandatory. Its starting offset depends on the number of recipients, and it ends at any byte up to 1024 offset from file beginning. All combinations of slots, methods and block offsets must be attempted until the decryption succeeds, as verified by the Poly1305 authentication. This takes very little time and false matches are impossible.
 
-The first block cipher has as additional authenticated data all header bytes (i.e. everything until the position where the block was found), to prevent any manipulation. Other blocks have no AAD. The nonce is incremented in little endian (i.e. the lowest bit of the first byte always changes). The first block uses a nonce one greater than the header, the second block one greater than the first, etc. The key stays the same throughout the file but is different on each new file even if identical authentication was used.
+The first block cipher has as additional authenticated data all header bytes (i.e. everything until the position where the block was found), to prevent any manipulation. Other blocks have no AAD. The nonce is incremented in little endian (i.e. the lowest bit of the first byte always changes). Block0 uses the same nonce as the header, the second block one greater than the first, etc. The key stays the same throughout the file but is different on each new file even if identical authentication was used.
 
 Block format:
 ```
@@ -136,7 +136,7 @@ Passwords are always prehashed with `sha512("covert:" + password)[:32]` to obtai
 ||9|128|
 ||10|32|
 ||≥ 11|8|
-|mem_cost||100 MiB|
+|mem_cost||200 MiB|
 |parallelism||1|
 |type||Argon2id|
 
