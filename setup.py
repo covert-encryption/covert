@@ -6,7 +6,7 @@ setup(
   description="File and message encryption program",
   long_description=open("README.md").read(),
   long_description_content_type="text/markdown",
-  url="",
+  url="https://github.com/covert-encryption/covert",
   use_scm_version=True,
   setup_requires=["setuptools_scm"],
   packages=find_packages(),
