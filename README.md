@@ -56,7 +56,8 @@ A key insight is that a receiver can *blindly* attempt to decrypt a file with ma
 ## Additional reading
 
 * [Covert Format Specification](https://github.com/covert-encryption/covert/blob/main/docs/Specification.md)
-* [The PGP Problem](https://latacora.micro.blog/2019/07/16/the-pgp-problem.html)
+* [Covert Encryption Security](https://github.com/covert-encryption/covert/blob/main/docs/Security.md)
 * [Reducing Metadata Leakage](https://petsymposium.org/2019/files/papers/issue4/popets-2019-0056.pdf) (a related research paper)
+* [The PGP Problem](https://latacora.micro.blog/2019/07/16/the-pgp-problem.html)
 
 Covert is in an early development phase, so you are encouraged to try it but avoid using it on any valuable data just yet. We are looking for interested developers and the specification itself is still open to changes, no compatibility guarantees.
