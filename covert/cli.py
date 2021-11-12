@@ -197,7 +197,7 @@ def main_enc(args):
     if outf is not realoutf:
       with realoutf:
         if realoutf.isatty():
-          stderr.write("\x1B[0;34m")
+          stderr.write("\x1B[1;30m```\x1B[0;34m\n")
           stderr.flush()
         try:
           data = util.armor_encode(data)
@@ -206,7 +206,7 @@ def main_enc(args):
         finally:
           try:
             if realoutf.isatty():
-              stderr.write(f"\x1B[0m")
+              stderr.write("\x1B[1;30m```\x1B[0m\n")
               stderr.flush()
           except Exception:
             pass
