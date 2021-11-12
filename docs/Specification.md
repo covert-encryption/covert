@@ -9,7 +9,7 @@ A file begins with a cryptographic header, followed by one or more encrypted aut
 The header contains tokens neded for decrypting block0, given suitable passwords or private keys. `ephpk` stores an ephemeral public key, always randomly created for each file, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (short mode) or by stealing bytes of `ephpk` (advanced mode). There may be up to 20 recipients, each a shared password or a public key. A short mode is provided for simple cases where 12 bytes header overhead is sufficient. Otherwise the header size is 32 bytes times the number of recipients, although decoy entries filled with random bytes may be added to obscure the number of recipients.
 
 | Header format | Mode | Description |
-|:---|:---|
+|:---|:---|:---|
 | `nonce:12` | Short | Single password `key = argon2(pw, nonce)` or wide-open `key = zeroes(32)`. |
 | `ephpk:32` | Advanced | Single pubkey `key = sha512(nonce + ecdh(eph, receiver))[:32]` |
 | `ephpk:32` `auth1:32` `auth2:32` ... | Advanced | Multiple authentication methods (pubkeys and/or passwords). |
@@ -97,10 +97,6 @@ The archive index may specify that the file is signed, including the correspondi
 Covert files and detached signatures may be converted into text strings that are easy to copy&paste e.g. on online discussions. A Covert message can even fit in a Tweet. URL-safe Base64 without padding is used.
 
 There are no headers to make it distinct of any random data encoded in Base64, but for maximal privacy and the best performance, raw binary files should be used instead whenever possible.
-
-```
-UMtgDS4BzWHx-1zPfKFPpyUnLfHzlUIO04bF35y4tN4VUcXqGuJDhYftvs6fpQ
-```
 
 ## Miscellaneus details
 
