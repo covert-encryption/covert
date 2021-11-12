@@ -1,8 +1,8 @@
 # Covert Encryption
 
-*A file and message encryptor with strong anonymity*
+<img src="https://github.com/covert-encryption/covert/blob/main/docs/logo.webp?raw=true" width="120" alt="Logo" align="left">
 
-<img src="https://github.com/covert-encryption/covert/blob/main/docs/logo.webp?raw=true" width="100" alt="Logo" align="left">
+*A file and message encryptor with strong anonymity*
 
 * **ChaCha20-Poly1305** stream cipher with authentication
 * **Argon2** secures shorter passwords against cracking
