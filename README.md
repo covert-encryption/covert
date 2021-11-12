@@ -2,6 +2,8 @@
 
 *A file and message encryptor with strong anonymity*
 
+<img src="https://github.com/covert-encryption/covert/blob/main/docs/logo.webp?raw=true" width="100" alt="Logo" align="left">
+
 * **ChaCha20-Poly1305** stream cipher with authentication
 * **Argon2** secures shorter passwords against cracking
 * **Curve25519** public key encrypt & sign with [SSH](https://medium.com/risan/upgrade-your-ssh-key-to-ed25519-c6e8d60d3c54), [Age](https://age-encryption.org/) and [MiniSign](https://jedisct1.github.io/minisign/) keys
