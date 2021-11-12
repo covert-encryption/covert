@@ -2,32 +2,33 @@
 
 ## File structure
 
-A file begins with a cryptographic header, followed by one or more encrypted authenticated blocks. The sole purpose of the header is to provide the keys needed to decrypt all the blocks where all remaining data is stored.
+A file begins with a cryptographic header, followed by one or more encrypted authenticated blocks. The sole purpose of the header is to provide the keys needed to decrypt all the blocks where all remaining data is stored. Each block identifies if it is followed by more blocks, and if so, the block length. Signed files append 80-byte signature blocks at the end for each signature (as identified within the file). The whole stream is self-contained, it knows where it stops, and does not need to rely on end-of-file for that.
 
-`header` `block0` `block1`...
+`header` `block0` `block1`...`blockN` `signature`*
 
-The header contains tokens neded for decrypting block0, given suitable authentication information. `ephpk` stores an ephemeral public key which is always recreated for each file, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (the first mode) or by stealing bytes off of `ephpk` (pubkey and multiple auth mode). There may be up to 20 recipients, each a shared password a public key.
+The header contains tokens neded for decrypting block0, given suitable passwords or private keys. `ephpk` stores an ephemeral public key, always randomly created for each file, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (short mode) or by stealing bytes of `ephpk` (advanced mode). There may be up to 20 recipients, each a shared password or a public key. A short mode is provided for simple cases where 12 bytes header overhead is sufficient. Otherwise the header size is 32 bytes times the number of recipients, although decoy entries filled with random bytes may be added to obscure the number of recipients.
 
-| Header format | Description |
+| Header format | Mode | Description |
 |:---|:---|
-| `nonce:12` | Single password `key = argon2(pw, nonce)` or wide-open `key = zeroes(32)`. |
-| `ephpk:32` | Single pubkey `key = sha512(nonce + ecdh(eph, peer))[:32]` |
-| `ephpk:32` `auth1:32` `auth2:32` ... | Multiple authentication methods (pubkeys and/or passwords). |
+| `nonce:12` | Short | Single password `key = argon2(pw, nonce)` or wide-open `key = zeroes(32)`. |
+| `ephpk:32` | Advanced | Single pubkey `key = sha512(nonce + ecdh(eph, receiver))[:32]` |
+| `ephpk:32` `auth1:32` `auth2:32` ... | Advanced | Multiple authentication methods (pubkeys and/or passwords). |
 
-Note that the single pubkey and the multiple auth modes are actually the same, and need no separate implementation.
+The short mode saves space for the commonly used single password and wide-open cases, versus using the advanced mode. The header is only 12 bytes and the auth key is directly used as the file key used to encrypt all the blocks.
 
-In the multiple authentication mode there are up to 19 *additional authentication slots*. Keys for each individual auth are derived as in the single password/pubkey modes and stored in an array. The file key is `auth[0]` and is not stored in file, while all others are stored in file as `authn = xor(auth[0], auth[n])`. Decoy entries with random bytes and shuffling the auth array can be used to obscure from recipients how many others there were.
+The advanced mode uses 0-19 *additional authentication slots*, thus the header size varies between 32-640 bytes. Note that the single pubkey and the multiple auth modes actually share the same implementation and are shown here separately only for illustration. 32-byte keys for each individual auth are derived as in the single password/pubkey modes and stored in `keys` array. Entries with random 32 bytes may be added to obscure the number of recipients.
 
-Each block is encrypted and authenticated by chacha20-poly1305, using nonce and key derived from header. The first block is mandatory. Its starting offset depends on the number of recipients, and it ends at any byte up to 1024 offset from file beginning. All combinations of slots, methods and block offsets must be attempted until the decryption succeeds, as verified by the Poly1305 authentication. This takes very little time and false matches are impossible.
+It is critical to **eliminate any duplicates** within the `keys` array, caused by duplicate passwords or recipient keys. Be sure to do this *after* any processing of recipient strings, as different input formats could be producing the same key (depending on your implementation), but it is recommended filter out duplicates also before any hashing (provides depth of security and avoids calculating the same keys multiple times).
 
-The first block cipher has as additional authenticated data all header bytes (i.e. everything until the position where the block was found), to prevent any manipulation. Other blocks have no AAD. The nonce is incremented in little endian (i.e. the lowest bit of the first byte always changes). Block0 uses the same nonce as the header, the second block one greater than the first, etc. The key stays the same throughout the file but is different on each new file even if identical authentication was used.
+The first key becomes the file key `key = keys[0]`, while the additional auth slots are filled with `authn = key ⊕ keys[n]` (xorred with the file key). The receiver tries opening a file using any of his keys directly as key on block0 or by xorring it with each 32-byte auth slot (up to 19 of them, if permitted by file size).
 
-Block format:
-```
-data:bytes nextlen:uint24 tag:bytes[16]
-```
+Each block is encrypted and authenticated by chacha20-poly1305, using nonce and key derived from header. Block0 is mandatory. Its starting offset depends on the number of recipients, and it ends at any byte up to 1024 offset from file beginning. All combinations of slots, methods and block offsets must be attempted until the decryption succeeds, as verified by the Poly1305 authentication. This takes very little time and false matches are impossible.
 
-The checksum tag comes directly from the ChaCha20-Poly1305 algorithm and is automatically added/removed by cryptographic libraries. The nextlen field is an unsigned int24 denoting the number of data bytes in the next block. If the value is 0, reading stops and no more blocks are processed, thus this format requires no information of where the stream ends but can provide for that information internally.
+Block0 has as *additional authenticated data* all header bytes (i.e. everything until the position where the block begins), to prevent any manipulation. Other blocks have no AAD. The nonce is incremented in little endian (i.e. the lowest bit of the first byte always changes). Block0 uses the same nonce as the header, the second block one greater than the first, etc. The key stays the same throughout the file but is different on each new file even if identical authentication was used.
+
+Block: `data` `nextlen:3` `polytag:16`
+
+The polytag comes directly from the ChaCha20-Poly1305 algorithm and is automatically added/removed by cryptographic libraries. The nextlen field is an uint24 denoting the number of data bytes in the next block. If the value is 0, reading stops and no more blocks are processed, thus this format requires no information of where the stream ends but can provide for that information internally.
 
 Only the first block can have zero bytes of data and only when the file is completely empty. Otherwise each block including the last one must carry at least one byte of data. A block can be up to 16 MiB + 18 bytes in external size (nextlen max value plus 19 bytes of structures).
 

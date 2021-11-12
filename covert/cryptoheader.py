@@ -20,7 +20,9 @@ def encrypt_header(auth):
     return n, nonce, key
   # Pubkeys and/or multiple auth mode
   auth = [passphrase.argon2(pw, n) for pw in set(authpw)]
-  auth += [pubkey.derive_recipient(eph_sk, peerpk, n) for peerpk in authpk]
+  auth += [pubkey.derive_recipient(eph_sk, peerpk, n) for peerpk in set(authpk)]
+  # It is crucial to remove any duplicates
+  auth = list(set(auth))
   random.shuffle(auth)
   # The first hash becomes the key and any additional ones are xorred with it
   key, *auth = auth
