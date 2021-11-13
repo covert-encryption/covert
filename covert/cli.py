@@ -131,6 +131,8 @@ def run_decryption(infile, args):
 def main_enc(args):
   vispw = []
   padding = .01 * float(args.padding) if args.padding is not None else .05
+  if not 0 <= padding <= 3.0:
+    raise ValueError('Invalid padding specified. The valid range is 0 to 300 %.')
   if args.authpw:
     l = len(args.authpw)
     args.authpw = [pw for pw in args.authpw if isinstance(pw, str)
@@ -187,6 +189,7 @@ def main_enc(args):
       )
       for id in args.identity:
         methods += f"  ✍️  {id[-10:]}"
+      methods += f"  ⬛ pad {a.padding:,} B" if a.padding else "  ⬛ no padding"
       if methods:
         lock += f"    {methods}"
       stderr.write(f"\x1B[1m{lock}\x1B[0m\n")
