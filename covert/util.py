@@ -1,24 +1,27 @@
+import random
 import unicodedata
-from base64 import urlsafe_b64decode, urlsafe_b64encode
+from base64 import b64decode, b64encode
 from secrets import token_bytes
 
-ARMOR_MAX_SINGLELINE = 16000  # Windows console is limited to 16384
-ARMOR_SPLIT_LEN = 120  # Should be a multiple of 4
+ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
 
 
 def armor_decode(data):
-  """URL-safe Base64 decode."""
+  """Base64 decode."""
   # Need to remove whitespace and backticks (if accidentally pasted) before adding padding
   data = bytes(b for b in data if b not in b' \n\r\t`')
+  data = data.replace('-', '+').replace('_', '/')  # Support also url-safe base64
   padding = -len(data) % 4
-  return urlsafe_b64decode(data + padding*b'=').rstrip(b'=')
+  return b64decode(data + padding*b'=', validate=True)
 
 
 def armor_encode(data):
-  """Actually URL-safe Base64 without the padding nonsense, and with line wrapping."""
-  data = urlsafe_b64encode(data).rstrip(b'=')
+  """Base64 without the padding nonsense, and with adaptive line wrapping."""
+  data = b64encode(data).rstrip(b'=')
   if len(data) > ARMOR_MAX_SINGLELINE:
-    data = b'\n'.join([data[i:i + ARMOR_SPLIT_LEN] for i in range(0, len(data), ARMOR_SPLIT_LEN)])
+    # Make fingerprinting the encoding by line lengths a bit harder while still using >76
+    splitlen = random.choice(range(76, 121, 4))
+    data = b'\n'.join([data[i:i + splitlen] for i in range(0, len(data), splitlen)])
   return data
 
 
