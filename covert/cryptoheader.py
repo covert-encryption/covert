@@ -62,7 +62,7 @@ def decrypt_header(ciphertext, auth):
 
 
 def find_header_slots(ct, n, key):
-  slots = [bytes(32)] + [ct[i * 32: (i+1) * 32] for i in range(1, 19) if (i+1) * 32 <= len(ct) - 19]
+  slots = [bytes(32)] + [ct[i * 32:(i+1) * 32] for i in range(1, 19) if (i+1) * 32 <= len(ct) - 19]
   slotends = [(i+1) * 32 for i in range(len(slots))]
   for i, s in enumerate(slots):
     k = util.xor(s, key)
