@@ -92,7 +92,7 @@ def ask(prompt, create=False):
         pwhint += '\n' * max(0, 4 - pwhint.count('\n'))
         pwtitle, pwrest = pwhint.split('\n', 1)
       else:
-        pwtitle, pwrest, valid = 'Covert decryption', '\n', len(pwd.encode()) >= 8
+        pwtitle, pwrest, valid = 'Covert decryption', '\n', True
       out = f"\x1B[1;1H\x1B[1;37;44m{pwtitle:56}\x1B[0m\n{pwrest}{prompt}: "
       pwdisp = pwd if visible else len(pwd) * '·'
       out += f"{pwdisp[:pos]}\x1B7{pwdisp[pos:]}"
@@ -121,8 +121,9 @@ def ask(prompt, create=False):
         elif ch == 'END': pos = len(pwd)
         elif ch == "ENTER":
           if valid: return pwd, visible
-          pwd = generate()
-          return pwd, True
+          if create:
+            pwd = generate()
+            return pwd, True
         elif ch == "ESC":
           visible = not visible
         elif ch == "TAB":
