@@ -5,6 +5,8 @@ from io import BytesIO
 
 import msgpack
 
+from covert import util
+
 assert msgpack.version >= (1, 0, 0), 'Old 0.5.6 version creates invalid archives.'
 
 
@@ -124,20 +126,10 @@ class Archive:
     # A simple calculation, streaming files are at most partially included (extrasize)
     return sum(f['s'] if 's' in f else 0 for f in self.flist) + self.extrasize
 
-  def random_padding(self, p=0.05, capsize=1 << 20):
+  def random_padding(self, p=0.05):
     """Randomize the amount of padding. Can be called after adding files but before encoding."""
     assert self.stage <= Stage.FINALIZE
-    if not p:
-      self.padding = 0
-      return
-    # Length of data considered minimal
-    low = int(100 * p)
-    # Calculate the preferred padding size with an upper limit
-    padsize = min(capsize, 2 * low +  p * self.total_size)
-    # Randomize with a mean of padsize but no upper limit
-    padsize = int(round(random.expovariate(1.0 / padsize)))
-    # Avoid ever revealing lengths of very short messages
-    self.padding = max(low - self.total_size, padsize)
+    self.padding = util.random_padding(self.total_size, p)
 
   def decode(self, blocks):
     it = iter(blocks)

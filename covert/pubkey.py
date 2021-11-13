@@ -8,6 +8,7 @@ from pysodium import crypto_pwhash_scryptsalsa208sha256
 
 from covert import bech, passphrase, util
 
+
 def decode_pk(keystr):
   SSH_ED25519 = "AAAAC3NzaC1lZDI1NTE5AAAA"
   if keystr.startswith("age1"):
@@ -83,6 +84,7 @@ def decode_sk(keystr):
       return decode_sk_minisign(line)
   raise ValueError(f"No private key found for identity {keystr}")
 
+
 def decode_sk_minisign(keystr):
   data = b64decode(keystr)
   fmt, salt, ops, mem, token = struct.unpack('<6s32sQQ104s', data)
@@ -105,6 +107,7 @@ def decode_sk_minisign(keystr):
   if sodium.crypto_sign_ed25519_pk_to_curve25519(pk) == sodium.crypto_scalarmult_base(key):
     return key
   raise ValueError('Unable to convert MiniSign secret key')
+
 
 def sk_to_pk(privkey):
   return sodium.crypto_scalarmult_base(privkey)

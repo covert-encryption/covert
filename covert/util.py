@@ -1,6 +1,7 @@
 import random
 import unicodedata
 from base64 import b64decode, b64encode
+from math import log2
 from secrets import token_bytes
 
 ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
@@ -45,3 +46,17 @@ def xor(a, b):
   a = int.from_bytes(a, "little")
   b = int.from_bytes(b, "little")
   return (a ^ b).to_bytes(l, "little")
+
+
+def random_padding(total, p):
+  """Calculate random padding size in bytes as (roughly) proportion p of total size."""
+  if not p:
+    return 0
+  # Choose the amount of fixed padding to hide very short messages
+  low = int(p * 200)
+  padfixed = max(0, low - total)
+  # Calculate a preferred mean size and randomize
+  padsize = 2 + p * .7e8 * log2(1 + 1e-8 * max(low, total))
+  padsize = int(round(random.expovariate(1.0 / padsize)))
+  # Apply pad-to-fixed-size for very short messages plus random padding
+  return padfixed + padsize
