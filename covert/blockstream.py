@@ -73,21 +73,23 @@ def decrypt_file(auth, f):
         nonce = noncegen(nblk)
         add_to_queue(p, nextlen, nblk)
 
-  keys = [pubkey.sk_to_pk(pubkey.decode_sk(sk)) for sk in identities]
-  keys += [pubkey.decode_pk(pk) for pk in pks]
-  if mmapped:
-    while len(ciphertext) - pos >= 80:
-      sigblock = ciphertext[pos:pos + 80]
-      pos += 80
-      for pk in keys:
-        nsig = sha512(blkhash + pk).digest()[:12]
-        ksig = blkhash[:32]
-        signature = chacha.decrypt(sigblock, None, nsig, ksig)
-        try:
-          sign.verify(signature, blkhash, pk)
-          stderr.write(f"Verified signature {key}\n")
-        except Exception:
-          pass
+  if False:
+    # Signature writing (proto)
+    keys = [pubkey.sk_to_pk(pubkey.decode_sk(sk)) for sk in identities]
+    keys += [pubkey.decode_pk(pk) for pk in pks]
+    if mmapped:
+      while len(ciphertext) - pos >= 80:
+        sigblock = ciphertext[pos:pos + 80]
+        pos += 80
+        for pk in keys:
+          nsig = sha512(blkhash + pk).digest()[:12]
+          ksig = blkhash[:32]
+          signature = chacha.decrypt(sigblock, None, nsig, ksig)
+          try:
+            sign.verify(signature, blkhash, pk)
+            stderr.write(f"Verified signature {key}\n")
+          except Exception:
+            pass
 
 
 class Block:
