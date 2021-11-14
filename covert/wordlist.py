@@ -1,53 +1,54 @@
-# A custom list of 1024 common 2-7 letter words, with unique 3-prefixes and no prefix words, entropy 2.2b/letter 10b/word
+# A custom list of 1024 common 3-6 letter words, with unique 3-prefixes and no prefix words, entropy 2.1b/letter 10b/word
 words: list = """
-abbey about abroad abuse access act adam added adept adopt affect again age agreed aid air aisle akin alan albert alcott
-alder alert algae alive all along alpha alter amazed amber amer amino among anal anchor andrew angle animal annual anon
-answer anti appear arab arbor arch are argued arise army arnold array art ascent ash asia aspect assume asthma atomic
-attack audit august aura author avant avenue aviv avoid away baby back bad bag bailey baker ball bank bar based battle
-bauer bay bear become been began behind being below ben berlin best better bhakti bias bible bid big bill binary bio
-birth bishop bit black blend blind blood blue board bob body bog bold bone book born boston both bound bowl boy brain
-break bring brown brush buck budget buffer bug bulk bump bunch bureau bus but cable cache cad cairo called came can cap
-care case catch cause cave cedar cells center cereal change check child choice church cinema circle city class clear
-client close club coast code coins cold come con cool copy core cost cotton could cover cow craft create crisis cross
-crude cuba cues cult curve custom dac daily dallas damage danger dark data david dawn day death debt decide deep define
-deity del demand denied depth derive design detail device dialog dick die dig dilute dim dinner diode direct disk divine
-doctor dodge dog dollar domain done door dorsal dose dot doubt down drawn dream drive drop drug dublin duct dull dumb
-duncan duplex during dust early east eat eco editor effect ego eiffel elaine eleven elite ellen embryo emily empire end
-engine ensure entire envy equal era erect eric error escape esp essay estate ethnic evans even evil exact except exempt
-exist expect extent fabric fact faith fall family fan far fast father fault fear feel fein felt female fence ferry fes
-fetal fichte fide field fifty file find first fish fit fixed flat flesh flight flow fluid foil follow fond food for
-found france free friend from fuel full funds fur fusion gain galaxy game gang garden gas gate gauge gay geese gel
-gender george german ghana gibson gill ginger girl given glass glenn glide global glue goal god goes gold gone good
-gordon got gould gown grant great grid group grudge guard guide gulf gun guru gustav gut habits hack had hague hair half
-hammer hand hard has hat haul have hawaii hay hazard head hebrew hector hedge heels height help hem henry her hess hill
-hindu hip hired hoarse hobbes hold home honor hook hope horse host hot house how hub huge hull human hung hurt hush hut
-ica idea ill image impact income indeed infant inland inner inside into island italy jack jagged jail james jan jar jed
-jenny jersey jesus jet jewish jin joint jolly jones jordan joseph judge july jump june jury just kahn kali kama kansas
-kaplan karl kassel kate keep keith kelly kent kernel khan kids killed kind kirk kiss kit klaus knew know kolb kong korea
-kosovo kramer kris kroll kung kurt labor lack lady lag laid lake lamp land lap large last later laugh lava law lay least
-lectin led lee legal leiden lemon length leo leper less let level liable libya lick lid lies life light like lily limit
-line lips list little living load lobby local lodge logic lome long look lord lost lot louis love low luck lug lumber
-lunch lure lust luther lynn mac made magic mahler main make male mama many map market mass matter maud max may mccoy
-means media meet melt member men merely mess method mice middle miles mimic mind mirror miss mit mobile model mohr moist
-mol money moon more most mother mouth move mowing much multi munich murder must mutual myriad obey oculus oder off oil
-oliver open opium option oral order organ origin orthop out oxygen pace pad page pain palace panel paper part past path
-paul paw pay peace peck pedro peer pelvic pen pepper per pest peter phase philip phone piano pick piece pilot pink pipe
-pistol pitch place please plot plus poetry point policy pomp pond poor pope port post pot pounds prayer press price
-proper puerto pulled punch pupils pure pushed put qatar qed quasi queen quest quite quoted rabbit race radio raft rage
-raised rake ram range rapid rash rather raven ray razor real rebel recent red reed reform region reign relief remain
-rent report result return review rhesus ribs rich ride rifle right rim ring ripe risk river road robert rock rod roger
-role roman ronald room rose roth round row rubber rude rumors run russia sabha sacred sad safety sage said sake sales
-same santa sarah sas sat sauce save saw say scale school scope screen scuba sea second sed see segal seized self semi
-sense series set seven sewing sexual shall she ship should shri shut sick side sierra sign silver simply since sir site
-sketch skills slave sleep slight slowly sludge small smell smith smooth snake sneak sniff snow soap sodium soft solid
-some son sort south sown space speech spirit split spoke spring spun square state step still story strong study style
-sub such sudden suit sultan summer sun supply sure susan suture swamp sweet switch sword syntax syria table tackle tail
-take talk tamil tank tape target task tate taught tax team tech teeth tell temple ten terms test text that the this
-those three thus tibet ticket tied tight till time tiny tip tired title toby today told tom tone too top torn tossed
-total touch toward trade tree tried troops true tube tulsa tumor tunnel turn tutor twenty twice type tyrant uncle under
-united unrest unseen until urine value van vary vast vein velvet venice very vessel veto via vice video view villa vine
-virtue visit vital vivo voice volume vote wade wage wait wall want war was water wave wealth week weight well went were
-west what when which who wicked wide wig will window wire wish with wolf wood work wreck write xander xbox xerox xi xray
-yang years yellow yes yin york you zane zara zen zippo zorro zulu
+able about absent abuse access acid across act adapt add adjust admit adult advice affair afraid again age agree ahead
+aim air aisle alarm album alert alien all almost alone alpha also alter always amazed among amused anchor angle animal
+ankle annual answer any apart appear april arch are argue army around array art ascent ash ask aspect assume asthma atom
+attack audit august aunt author avoid away awful axis baby back badge bag ball bamboo bank bar base battle beach become
+beef before begin behind below bench best better beyond bid bike bind bio birth bitter black bleak blind blood blue
+board body boil bomb bone book border boss bottom bounce bowl box boy brain bread bring brown brush bubble buck budget
+build bulk bundle burden bus but buyer buzz cable cache cage cake call came can car case catch cause cave celery cement
+census cereal change check child choice chunk cigar circle city civil class clean client close club coast code coffee
+coil cold come cool copy core cost cotton couch cover coyote craft cream crime cross cruel cry cube cue cult cup curve
+custom cute cycle dad damage danger daring dash dawn day deal debate decide deer define degree deity delay demand denial
+depth derive design detail device dial dice die differ dim dinner direct dish divert dizzy doctor dog dollar domain
+donate door dose double dove draft dream drive drop drum dry duck dumb dune during dust dutch dwarf eager early east
+echo eco edge edit effort egg eight either elbow elder elite else embark emerge emily employ enable end enemy engine
+enjoy enlist enough enrich ensure entire envy equal era erode error erupt escape essay estate ethics evil evoke exact
+excess exist exotic expect extent eye fabric face fade faith fall family fan far father fault feel female fence fetch
+fever few fiber field figure file find first fish fit fix flat flesh flight float fluid fly foam focus fog foil follow
+food force fossil found fox frame fresh friend frog fruit fuel fun fury future gadget gain galaxy game gap garden gas
+gate gauge gaze genius ghost giant gift giggle ginger girl give glass glide globe glue goal god gold good gospel govern
+gown grant great grid group grunt guard guess guide gulf gun gym habit hair half hammer hand happy hard hat have hawk
+hay hazard head hedge height help hen hero hidden high hill hint hip hire hobby hockey hold home honey hood hope horse
+host hotel hour hover how hub huge human hungry hurt hybrid ice icon idea idle ignore ill image immune impact income
+index infant inhale inject inmate inner input inside into invest iron island issue italy item ivory jacket jaguar james
+jar jazz jeans jelly jewel job joint joke joy judge juice july jump june just kansas kate keep kernel key kick kid kind
+kiss kit kiwi knee knife know labor lady lag lake lamp laptop large later laugh lava law layer lazy leader left legal
+lemon length lesson letter level liar libya lid life light like limit line lion liquid list little live lizard load
+local logic long loop lost loud love low loyal lucky lumber lunch lust luxury lyrics mad magic main major make male
+mammal man map market mass matter maze mccoy meadow media meet melt member men mercy mesh method middle milk mimic mind
+mirror miss mix mobile model mom monkey moon more mother mouse move much muffin mule must mutual myself myth naive name
+napkin narrow nasty nation near neck need nephew nerve nest net never news next nice night noble noise noodle normal
+nose note novel now number nurse nut oak obey object oblige obtain occur ocean odor off often oil okay old olive omit
+once one onion online open opium oppose option orange orbit order organ orient orphan other outer oval oven own oxygen
+oyster ozone pact paddle page pair palace panel paper parade past path pause pave paw pay peace pen people pepper permit
+pet philip phone phrase piano pick piece pig pilot pink pipe pistol pitch pizza place please pluck poem point polar pond
+pool post pot pound powder praise prefer price profit public pull punch pupil purity push put puzzle qatar quasi queen
+quite quoted rabbit race radio rail rally ramp range rapid rare rather raven raw razor real rebel recall red reform
+region reject relief remain rent reopen report result return review reward rhythm rib rich ride rifle right ring riot
+ripple risk ritual river road robot rocket room rose rotate round row royal rubber rude rug rule run rural sad safe sage
+sail salad same santa sauce save say scale scene school scope screen scuba sea second seed self semi sense series settle
+seven shadow she ship shock shrimp shy sick side siege sign silver simple since siren sister six size skate sketch ski
+skull slab sleep slight slogan slush small smile smooth snake sniff snow soap soccer soda soft solid son soon sort south
+space speak sphere spirit split spoil spring spy square state step still story strong stuff style submit such sudden
+suffer sugar suit summer sun supply sure swamp sweet switch sword symbol syntax syria system table tackle tag tail talk
+tank tape target task tattoo taxi team tell ten term test text that theme this three thumb tibet ticket tide tight tilt
+time tiny tip tired tissue title toast today toe toilet token tomato tone tool top torch toss total toward toy trade
+tree trial trophy true try tube tumble tunnel turn twenty twice two type ugly unable uncle under unfair unique unlock
+until unveil update uphold upon upper upset urban urge usage use usual vacuum vague valid van vapor vast vault vein
+velvet vendor very vessel viable video view villa violin virus visit vital vivid vocal voice volume vote voyage wage
+wait wall want war wash water wave way wealth web weird were west wet what when whip wide wife will window wire wish
+wolf woman wonder wood work wrap wreck write wrong xander xbox xerox xray yang yard year yellow yes yin york you zane
+zara zebra zen zero zippo zone zoo zorro zulu
 """.split()
 assert len(words) == 1024  # Exactly 10 bits of entropy per word
