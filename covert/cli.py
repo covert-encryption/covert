@@ -140,7 +140,7 @@ def main_enc(args):
   identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr)]
   signatures = identities = list(sorted(set(identities), key=str))
   if len(recipients) < l:
-    strerr.write(' ⚠️  Duplicate recipient keys dropped.\n')
+    stderr.write(' ⚠️  Duplicate recipient keys dropped.\n')
   # Input files
   if not args.files or True in args.files:
     if stdin.isatty():
