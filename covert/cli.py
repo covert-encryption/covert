@@ -62,7 +62,7 @@ def run_decryption(infile, args, passwords, identities):
         n = prev['n']
         s = prev['s']
         r = '<renamed>' if 'renamed' in prev else ''
-        progress.write(f'{s:15,d} 📄 {n:60}{r}')
+        progress.write(f'{s:15,d} 📄 {n:60}{r}', file=stderr)
       if a.curfile:
         n = a.curfile.get('n', '')
         if not n and a.curfile.get('s', float('inf')) < TTY_MAX_SIZE:
@@ -71,7 +71,7 @@ def run_decryption(infile, args, passwords, identities):
           if not outdir:
             outdir = Path(args.outfile).resolve()
             outdir.mkdir(parents=True, exist_ok=True)
-            progress.write(f" ▶️ \x1B[1;34m  Extracting to \x1B[1;37m{outdir}\x1B[0m")
+            progress.write(f" ▶️ \x1B[1;34m  Extracting to \x1B[1;37m{outdir}\x1B[0m", file=stderr)
           name = outdir.joinpath(n)
           if not name.resolve().is_relative_to(outdir) or name.is_reserved():
             progress.close()
@@ -80,7 +80,7 @@ def run_decryption(infile, args, passwords, identities):
           f = open(name, 'wb')
         elif outdir is None:
           outdir = False
-          progress.write(" ▶️ \x1B[1;34m  The archive contains files. To extract, use \x1B[1;37m-o PATH\x1B[0m")
+          progress.write(" ▶️ \x1B[1;34m  The archive contains files. To extract, use \x1B[1;37m-o PATH\x1B[0m", file=stderr)
 
       # Next file
       if progress:
@@ -161,7 +161,6 @@ def main_enc(args):
     args.files = [stin] + [f for f in args.files if f != True]
   a = Archive()
   a.file_index(args.files)
-  a.random_padding(padding)
   # Output files
   realoutf = open(args.outfile, "wb") if args.outfile else stdout.buffer
   if args.armor or not args.outfile and stdout.isatty():
@@ -172,8 +171,18 @@ def main_enc(args):
     outf = BytesIO()
   else:
     outf = realoutf
+  # Print files during encoding and update padding size at the end
+  def nextfile_callback(prev, cur):
+    if prev:
+      s = prev.get('s')
+      n = prev.get('n')
+      progress.write(f'{s:15,d} 📄 {n:60}' if n else f'{s:15,d} 💬 <message>', file=stderr)
+    if not cur:
+      a.random_padding(padding)
+      progress.write(f'{a.padding:15,d} ⬛ <padding>', file=stderr)
+  a.nextfilecb = nextfile_callback
+  # Main processing
   with outf:
-    # Main processing
     with tqdm(
       total=a.total_size, delay=1.0, ncols=78, unit='B', unit_scale=True, bar_format="{l_bar}         {bar}{r_bar}"
     ) as progress:
@@ -183,13 +192,6 @@ def main_enc(args):
     # Pretty output printout
     if stderr.isatty():
       # Print a list of files
-      out = ''
-      for f in a.flist:
-        s = f.get('s')
-        n = f.get('n')
-        out += f'{s:15,d} 📄 {n:60}\n' if n else f'{s:15,d} 💬 <message>\n'
-      if a.padding:
-        out += f'{a.padding:15,d} ⬛ <padding>\n'
       lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
       methods = "  ".join(
         [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (len(passwords) - len(vispw)) * ["🔑 <pw>"]
@@ -200,7 +202,7 @@ def main_enc(args):
         lock += f"    {methods}"
       if args.outfile:
         lock += f"  💾 {args.outfile}\n"
-      out += f"\n\x1B[1m{lock}\x1B[0m\n"
+      out = f"\n\x1B[1m{lock}\x1B[0m\n"
       stderr.write(out)
       stderr.flush()
     if outf is not realoutf:
