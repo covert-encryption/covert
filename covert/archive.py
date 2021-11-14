@@ -1,6 +1,7 @@
 import os
 import random
 from enum import IntEnum
+from glob import glob
 from io import BytesIO
 
 import msgpack
@@ -219,10 +220,31 @@ class Archive:
     self.flist = []
     for f in files:
       if isinstance(f, str):
-        name = f.replace("\\", "/").split("/")[-1]
-        size = os.path.getsize(f)
-        self.flist.append(dict(n=name, s=size))
-        self.fds.append(open(f, "rb"))
+        name = f.replace("\\", "/")
+        if '*' in name or '?' in name:
+          files2 = glob(f, recursive=True)
+        elif name.endswith("/") or os.path.isdir(f):
+          files2 = glob(os.path.join(f, '**'), recursive=True)
+        else:
+          files2 = [f]
+        skip = len(os.path.join(name, "").replace("\\", "/").split("/")) - 2
+        for f in files2:
+          if os.path.isdir(f):
+            continue
+          if not os.path.isfile(f):
+            raise ValueError(f"File {f!r} not found")
+          p = []
+          skipfile = False
+          for d in f.replace("\\", "/").split("/")[skip:]:
+            if d in ('.', '..'):
+              p = []
+              continue
+            p.append(d)
+          else:
+            name = "/".join(p)
+            size = os.path.getsize(f)
+            self.flist.append(dict(n=name, s=size))
+            self.fds.append(open(f, "rb"))
       elif isinstance(f, bytes):
         self.flist.append(dict(s=len(f)))
         self.fds.append(BytesIO(f))
