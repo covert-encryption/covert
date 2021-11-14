@@ -96,7 +96,7 @@ class Archive:
           continue
         num = self.file.readinto(block.data[block.pos:block.pos + self.bytesleft])
         if not num:
-          raise ValueError(f"Unexpected end of file {self.fidx + 1} at {self.file.tell()}")
+          raise ValueError(f"Unexpected end of file {self.curfile.get('n', self.curfile)} at {self.file.tell():,} bytes (was {self.curfile.get('s'):,} bytes)")
         block.pos += num
         self.fpos += num
         continue
