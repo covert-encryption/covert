@@ -147,7 +147,7 @@ def main_enc(args):
   if len(recipients) < l:
     strerr.write(' ⚠️  Duplicate recipient keys dropped.\n')
   # Input files
-  if not args.files or "-" in args.files:
+  if not args.files or True in args.files:
     if stdin.isatty():
       stderr.write(
         f'\x1B[?1049h\x1B[1;1H\x1B[1m   〰 ENTER MESSAGE 〰 \x1B[0m  (Ctrl+{"Z" if os.name == "nt" else "D"} to finish)\n'
@@ -163,7 +163,7 @@ def main_enc(args):
       stin = util.encode(stin)
     else:
       stin = stdin.buffer
-    args.files = [stin] + [f for f in args.files if f != "-"]
+    args.files = [stin] + [f for f in args.files if f != True]
   a = Archive()
   a.file_index(args.files)
   a.random_padding(padding)
@@ -187,16 +187,26 @@ def main_enc(args):
         outf.write(block)
     # Pretty output printout
     if stderr.isatty():
+      # Print a list of files
+      out = ''
+      for f in a.flist:
+        s = f.get('s')
+        n = f.get('n')
+        out += f'{s:15,d} 📄 {n:60}\n' if n else f'{s:15,d} 💬 <message>\n'
+      if a.padding:
+        out += f'{a.padding:15,d} ⬛ <padding>\n'
       lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
       methods = "  ".join(
         [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (len(passwords) - len(vispw)) * ["🔑 <pw>"]
       )
       for id in signatures:
         methods += f"  ✍️  {id}"
-      methods += f"  ⬛ pad {a.padding:,} B" if a.padding else "  ⬛ no padding"
       if methods:
         lock += f"    {methods}"
-      stderr.write(f"\x1B[1m{lock}\x1B[0m\n")
+      if args.outfile:
+        lock += f"  💾 {args.outfile}\n"
+      out += f"\n\x1B[1m{lock}\x1B[0m\n"
+      stderr.write(out)
       stderr.flush()
     if outf is not realoutf:
       outf.seek(0)
