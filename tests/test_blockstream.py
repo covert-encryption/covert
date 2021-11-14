@@ -7,7 +7,7 @@ import pytest
 from covert.blockstream import BS, decrypt_file, encrypt_file
 
 AUTH = False, ['justsomepassword'], [], []
-AUTH_DEC = ['justsomepassword'], [], []
+AUTH_DEC = ['justsomepassword'], []
 
 
 @pytest.mark.parametrize(
@@ -68,7 +68,7 @@ def test_latencies(values, expected_seq):
     next(e)
 
 
-@pytest.mark.parametrize("size", [0, 1, 5000, 20 << 20])
+@pytest.mark.parametrize("size", [1, 5000, 20 << 20])
 def test_encrypt_decrypt(size):
   """Verify that the blockstream level encrypt-decrypt cycle works as intended."""
 

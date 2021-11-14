@@ -240,7 +240,7 @@ def decode_sk_minisign(keystr):
 
 
 def decode_age_pk(keystr):
-  return Key(keystr=keystr, pk=bech.decode("age", keystr.lower()))
+  return Key(keystr=keystr, comment="age", pk=bech.decode("age", keystr.lower()))
 
 
 def encode_age_pk(key):
@@ -248,7 +248,7 @@ def encode_age_pk(key):
 
 
 def decode_age_sk(keystr):
-  return Key(keystr=keystr, sk=bech.decode("age-secret-key-", keystr.lower()))
+  return Key(keystr=keystr, comment="age", sk=bech.decode("age-secret-key-", keystr.lower()))
 
 
 def encode_age_sk(key):
