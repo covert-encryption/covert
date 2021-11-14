@@ -3,7 +3,7 @@ from secrets import token_bytes
 
 import nacl.bindings as sodium
 
-from covert import sign, pubkey
+from covert import pubkey, sign
 
 # Test vectors from https://age-encryption.org/v1
 AGE_PK = "age1zvkyg2lqzraa2lnjvqej32nkuu0ues2s82hzrye869xeexvn73equnujwj"
