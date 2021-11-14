@@ -3,7 +3,7 @@ words: list = """
 able about absent abuse access acid across act adapt add adjust admit adult advice affair afraid again age agree ahead
 aim air aisle alarm album alert alien all almost alone alpha also alter always amazed among amused anchor angle animal
 ankle annual answer any apart appear april arch are argue army around array art ascent ash ask aspect assume asthma atom
-attack audit august aunt author avoid away awful axis baby back badge bag ball bamboo bank bar base battle beach become
+attack audit august aunt author avoid away awful axis baby back bad bag ball bamboo bank bar base battle beach become
 beef before begin behind below bench best better beyond bid bike bind bio birth bitter black bleak blind blood blue
 board body boil bomb bone book border boss bottom bounce bowl box boy brain bread bring brown brush bubble buck budget
 build bulk bundle burden bus but buyer buzz cable cache cage cake call came can car case catch cause cave celery cement
