@@ -33,6 +33,7 @@ class Archive:
     self.fpos = None
     self.padding = 0
     self.buffer = bytes()
+    self.nextfilecb = None
 
   @property
   def file(self):
@@ -60,12 +61,16 @@ class Archive:
     if self.fidx == len(self.flist):
       self.stage = Stage.FINALIZE
       self.fidx = None
+      if self.nextfilecb:
+        self.nextfilecb(self.prevfile, self.curfile)
       return False
     if self.curfile.get('s') is None:
       self.stage = Stage.FILE_STREAM
       self.curfile['s'] = 0
     else:
       self.stage = Stage.FILE
+    if self.nextfilecb:
+      self.nextfilecb(self.prevfile, self.curfile)
     return True
 
   def encodeindex(self):
@@ -106,11 +111,13 @@ class Archive:
         maxdata = 10 << 20
         buffer = memoryview(bytearray(5 + maxdata))
         n = self.file.readinto(buffer[5:])
+        self.fpos += n
         enclen = msgpack.packb(n)
         if len(enclen) == 5 and n == maxdata:
           buffer[:5] = enclen
         elif n == 0:
           buffer = enclen
+          self.curfile['s'] = self.fpos
           self.nextfile()
         else:
           # Reformat buffer (rare so performance is no issue)
@@ -250,14 +257,22 @@ class Archive:
         self.fds.append(BytesIO(f))
       else:
         data = f.read(10 << 20)
+        n = None
+        d = dict()
+        if len(data) > 1e5:
+          d['n'] = 'noname.txt'
+        try:
+          data.decode()
+        except UnicodeDecodeError:
+          d['n'] = 'noname.dat'
         if len(data) == 10 << 20:
           # Getting too much data to buffer all, needs streaming
           self.extrasize += len(data)
-          self.flist.append(dict())
           self.fds.append(CombinedIO(data, f))
         else:
-          self.flist.append(dict(s=len(data)))
+          d['s'] = len(data)
           self.fds.append(BytesIO(data))
+        self.flist.append(d)
     if self.flist:
       self.index['f'] = self.flist
 
