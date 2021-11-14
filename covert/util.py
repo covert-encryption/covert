@@ -11,7 +11,7 @@ def armor_decode(data):
   """Base64 decode."""
   # Need to remove whitespace and backticks (if accidentally pasted) before adding padding
   data = bytes(b for b in data if b not in b' \n\r\t`')
-  data = data.replace('-', '+').replace('_', '/')  # Support also url-safe base64
+  data = data.replace(b'-', b'+').replace(b'_', b'/')  # Support also url-safe base64
   padding = -len(data) % 4
   return b64decode(data + padding*b'=', validate=True)
 

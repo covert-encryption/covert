@@ -7,7 +7,7 @@ from time import perf_counter
 
 from tqdm import tqdm
 
-from covert import passphrase, util
+from covert import passphrase, pubkey, util
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
 
@@ -15,17 +15,7 @@ ARMOR_MAX_SIZE = 32 << 20  # If output is a file (limit our memory usage)
 TTY_MAX_SIZE = 100 << 10  # If output is a tty (limit too lengthy spam)
 
 
-def run_encryption(a, outf, args):
-  #a.file = open(args.files[0], 'rb') if isinstance(args.files[0], str) else args.files[0]
-  progress = tqdm(delay=1.0, ncols=78, unit='B', unit_scale=True, bar_format="{l_bar}         {bar}{r_bar}")
-  for block in encrypt_file((args.noauth, args.authpw, args.authpk, args.identity), a.encode):
-    progress.update(len(block))
-    outf.write(block)
-  #if progress:
-  # progress.set_description(f'{a.fidx + 1:03}/{len(a.flist):03}')
-
-
-def run_decryption(infile, args):
+def run_decryption(infile, args, passwords, identities):
 
   def get_writable_file(name):
     # For a bit of security, files are extracted in a directory rather than at root.
@@ -52,7 +42,7 @@ def run_decryption(infile, args):
   outdir = None
   f = None
   messages = []
-  for data in a.decode(decrypt_file((args.authpw, args.authpk, args.identity), infile)):
+  for data in a.decode(decrypt_file((passwords, identities), infile)):
     if isinstance(data, dict):
       # Header parsed, check the file list
       for i, infile in enumerate(a.flist):
@@ -133,19 +123,29 @@ def main_enc(args):
   padding = .01 * float(args.padding) if args.padding is not None else .05
   if not 0 <= padding <= 3.0:
     raise ValueError('Invalid padding specified. The valid range is 0 to 300 %.')
-  if args.authpw:
-    l = len(args.authpw)
-    args.authpw = [pw for pw in args.authpw if isinstance(pw, str)
-                  ] + [pw for pw in args.authpw if not isinstance(pw, str)]
-    for i in range(l):
-      if args.authpw[i] == True:
-        num = f" {i+1}/{l}" if l > 1 else ""
-        args.authpw[i], visible = passphrase.ask(f"New passphrase{num}", create=True)
-        if visible:
-          vispw.append(args.authpw[i])
-      elif len(util.encode(args.authpw[i])) < passphrase.MINLEN:
-        # This would be rejected in hashing but for usability we do a check early
-        raise ValueError(f"The minimum password length is {passphrase.MINLEN} bytes.")
+  passwords, vispw = [], []
+  if not (args.askpass or args.passwords or args.recipients):
+    args.askpass = 1
+  l = args.askpass + len(args.passwords)
+  for i in range(args.askpass):
+    num = f" {i+1}/{l}" if l > 1 else ""
+    pw, visible = passphrase.ask(f"New passphrase{num}", create=True)
+    passwords.append(pw)
+    if visible:
+      vispw.append(pw)
+  passwords += args.passwords
+  # Convert recipient definitions into keys
+  recipients = [pubkey.decode_pk(keystr) for keystr in args.recipients]
+  for fn in args.recipfiles:
+    recipients += pubkey.read_pk_file(fn)
+  # Unique recipient keys sorted by keystr
+  l = len(recipients)
+  recipients = list(sorted(set(recipients), key=str))
+  # Signatures
+  identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr)]
+  signatures = identities = list(sorted(set(identities), key=str))
+  if len(recipients) < l:
+    strerr.write(' ⚠️  Duplicate recipient keys dropped.\n')
   # Input files
   if not args.files or "-" in args.files:
     if stdin.isatty():
@@ -179,16 +179,20 @@ def main_enc(args):
     outf = realoutf
   with outf:
     # Main processing
-    run_encryption(a, outf, args)
+    with tqdm(
+      total=a.total_size, delay=1.0, ncols=78, unit='B', unit_scale=True, bar_format="{l_bar}         {bar}{r_bar}"
+    ) as progress:
+      for block in encrypt_file((args.wideopen, passwords, recipients, signatures), a.encode):
+        progress.update(len(block))
+        outf.write(block)
     # Pretty output printout
     if stderr.isatty():
-      lock = " 🔓 wide-open" if args.noauth else " 🔒 covert"
+      lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
       methods = "  ".join(
-        [f'🔗 {a if len(a) < 20 else "…" + a[-9:]}' for a in args.authpk] + [f"🔑 {a}" for a in vispw] +
-        (len(args.authpw) - len(vispw)) * ["🔑 <pw>"]
+        [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (len(passwords) - len(vispw)) * ["🔑 <pw>"]
       )
-      for id in args.identity:
-        methods += f"  ✍️  {id[-10:]}"
+      for id in signatures:
+        methods += f"  ✍️  {id}"
       methods += f"  ⬛ pad {a.padding:,} B" if a.padding else "  ⬛ no padding"
       if methods:
         lock += f"    {methods}"
@@ -218,6 +222,8 @@ def main_enc(args):
 def main_dec(args):
   if len(args.files) > 1:
     raise ValueError("Only one input file is allowed when decrypting.")
+  identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr)]
+  identities = list(sorted(set(identities), key=str))
   infile = open(args.files[0], "rb") if args.files else stdin.buffer
   # If ASCII armored or TTY, read all input immediately (assumed to be short enough)
   total_size = os.path.getsize(args.files[0]) if args.files else 0
@@ -255,7 +261,7 @@ def main_dec(args):
   else:
     with suppress(OSError):
       infile = mmap.mmap(infile.fileno(), 0, access=mmap.ACCESS_READ)
-  run_decryption(infile, args)
+  run_decryption(infile, args, args.passwords, identities)
 
 
 def main_benchmark(args):

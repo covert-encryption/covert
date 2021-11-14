@@ -15,7 +15,7 @@ BS = (1 << 20) - 19  # The maximum block size to use (only affects encryption)
 
 
 def decrypt_file(auth, f):
-  pks, identities = auth[1:3]
+  pks = []  # FIXME: Needs to be loaded with signatures to verify (from archive)
 
   def add_to_queue(p, blklen, nblk):
     nonlocal pos
