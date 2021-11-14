@@ -2,6 +2,7 @@ import mmap
 import os
 from contextlib import suppress
 from io import BytesIO
+from pathlib import Path
 from sys import stderr, stdin, stdout
 from time import perf_counter
 
@@ -16,27 +17,6 @@ TTY_MAX_SIZE = 100 << 10  # If output is a tty (limit too lengthy spam)
 
 
 def run_decryption(infile, args, passwords, identities):
-
-  def get_writable_file(name):
-    # For a bit of security, files are extracted in a directory rather than at root.
-    nonlocal outdir
-    if not outdir:
-      if args.outfile and os.path.isdir(args.outfile):
-        outdir = os.path.absdir(args.outfile)
-      else:
-        while True:
-          outdir = passphrase.generate(2)
-          if not os.path.exists(outdir):
-            break
-        outdir = os.path.abspath(outdir)
-        try:
-          os.mkdir(outdir)
-        except OSError:
-          raise ValueError('Unable to create folder {outdir}')
-      outdir = os.path.join(outdir, '')  # Add a trailing slash
-      progress.write(f" ▶️ \x1B[1;34m  Extracting to \x1B[1;37m{outdir}\x1B[0m")
-    return open(os.path.join(outdir, name), 'wb')
-
   a = Archive()
   progress = None
   outdir = None
@@ -63,8 +43,8 @@ def run_decryption(infile, args, passwords, identities):
       )
     elif isinstance(data, bool):
       # Nextfile
+      prev = a.prevfile
       if f:
-        prev = a.prevfile
         if isinstance(f, BytesIO):
           f.seek(0)
           data = f.read()
@@ -77,17 +57,31 @@ def run_decryption(infile, args, passwords, identities):
             with get_writable_file(prev['n']) as f2:
               f2.write(data)
         f.close()
-        if 'n' in prev:
-          n = prev['n']
-          s = prev['s']
-          r = '<renamed>' if 'renamed' in prev else ''
-          progress.write(f'{s:15,d} 📄 {n:60}{r}')
+        f = None
+      if prev and 'n' in prev:
+        n = prev['n']
+        s = prev['s']
+        r = '<renamed>' if 'renamed' in prev else ''
+        progress.write(f'{s:15,d} 📄 {n:60}{r}')
       if a.curfile:
         n = a.curfile.get('n', '')
-        if not n:
+        if not n and a.curfile.get('s', float('inf')) < TTY_MAX_SIZE:
           f = BytesIO()
-        else:
-          f = get_writable_file(n)
+        elif args.outfile:
+          if not outdir:
+            outdir = Path(args.outfile).resolve()
+            outdir.mkdir(parents=True, exist_ok=True)
+            progress.write(f" ▶️ \x1B[1;34m  Extracting to \x1B[1;37m{outdir}\x1B[0m")
+          name = outdir.joinpath(n)
+          if not name.resolve().is_relative_to(outdir) or name.is_reserved():
+            progress.close()
+            raise ValueError(f'Invalid filename {n!r}')
+          name.parent.mkdir(parents=True, exist_ok=True)
+          f = open(name, 'wb')
+        elif outdir is None:
+          outdir = False
+          progress.write(" ▶️ \x1B[1;34m  The archive contains files. To extract, use \x1B[1;37m-o PATH\x1B[0m")
+
       # Next file
       if progress:
         if a.fidx is not None:
@@ -95,7 +89,8 @@ def run_decryption(infile, args, passwords, identities):
         else:
           progress.set_description('')
     else:
-      f.write(data)
+      if f:
+        f.write(data)
       if progress:
         progress.update(len(data))
   if progress:
