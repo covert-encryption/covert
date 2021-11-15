@@ -4,6 +4,31 @@ import time
 from contextlib import contextmanager
 
 
+def read_hidden(prompt):
+  with terminal() as term:
+    term.write(f'{prompt}: ')
+    try:
+      data = ""
+      t = time.monotonic()
+      while True:
+        for key in term.reader():
+          if key == "ESC":
+            raise KeyboardInterrupt
+          elif key == "BACKSPACE":
+            data = data[:-1]
+          elif key == "ENTER":
+            if time.monotonic() - t > 0.2:
+              return data
+            data += '\n'
+          elif len(key) == 1:
+            data += key
+          t = time.monotonic()
+        term.write(f"\x1B7\x1B[1;30m  ({len(data)})\x1B[0m\x1B[K\x1B8")
+    finally:
+      # Return to start of line and clear the prompt
+      term.write(f"\r\x1B[K")
+
+
 @contextmanager
 def unix_terminal():
   fd = os.open('/dev/tty', os.O_RDWR | os.O_NOCTTY)

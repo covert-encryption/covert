@@ -8,7 +8,7 @@ from time import perf_counter
 
 from tqdm import tqdm
 
-from covert import passphrase, pubkey, util
+from covert import passphrase, pubkey, tty, util
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
 
@@ -234,28 +234,10 @@ def main_dec(args):
   infile = open(args.files[0], "rb") if args.files else stdin.buffer
   # If ASCII armored or TTY, read all input immediately (assumed to be short enough)
   total_size = os.path.getsize(args.files[0]) if args.files else 0
-  if args.armor or infile.isatty():
-    if infile.isatty():
-      stderr.write("\x1B[?1049h\x1B[1;1H\x1B[1m〰 COVERT 〰\x1B[0m   (paste and press enter)\x1B[1;30m\n")
-      stderr.flush()
-    try:
-      data = b""
-      while True:
-        line = input().strip().encode()
-        if not line: break
-        data += line
-      data = util.armor_decode(data)
-      total_size = len(data)
-    except Exception as e:
-      raise ValueError(f"Incomplete or malformed data. {e} {len(data)}\n{line}")
-    finally:
-      with suppress(Exception):
-        if infile.isatty():
-          stderr.write("\x1B[0m\x1B[2J\x1B[?1049l")
-          stderr.flush()
-    if not data:
-      raise ValueError("No input, aborted.")
+  if infile.isatty():
+    data = util.armor_decode(tty.read_hidden("Encrypted message").encode())
     infile = BytesIO(data)
+    total_size = len(data)
     del data
   elif 40 <= total_size <= ARMOR_MAX_SIZE:
     # Try reading the file as armored text rather than binary
