@@ -218,18 +218,22 @@ def decode_sk_ssh(data):
   raise ValueError("No ssh-ed25519 keys could be read (password protection is not supported)")
 
 
-def decode_sk_minisign(keystr):
+def decode_sk_minisign(keystr, pw=None):
+  # None means try without password, then ask
+  if pw is None:
+    try:
+      return decode_sk_minisign(keystr, b'')
+    except ValueError:
+      pass
+    pw = util.encode(passphrase.ask('MiniSign passkey')[0])
+    return decode_sk_minisign(keystr, pw)
   data = b64decode(keystr)
   fmt, salt, ops, mem, token = struct.unpack('<6s32sQQ104s', data)
   if fmt != b'EdScB2' or ops != 1 << 25 or mem != 1 << 30:
     raise ValueError(f'Not a (supported) MiniSign secret key {fmt=}')
-  pw = util.encode(passphrase.ask('MiniSign passkey')[0])
   out = sodium.crypto_pwhash_scryptsalsa208sha256_ll(pw, salt, n=1 << 20, r=8, p=1, maxmem=float('inf'), dklen=104)
   token = util.xor(out, token)
-  keyid = token[:8]
-  edsk = token[8:40]
-  edpk = token[40:72]
-  csum = token[72:]
+  keyid, edsk, edpk, csum = struct.unpack('8s32s32s32s', token)
   b2state = sodium.crypto_generichash_blake2b_init()
   sodium.crypto_generichash.generichash_blake2b_update(b2state, fmt[:2] + keyid + edsk + edpk)
   csum2 = sodium.crypto_generichash.generichash_blake2b_final(b2state)
