@@ -181,7 +181,7 @@ def main_enc(args):
       progress.write(f'{s:15,d} 📄 {n:60}' if n else f'{s:15,d} 💬 <message>', file=stderr)
     if not cur:
       a.random_padding(padding)
-      progress.write(f'{a.padding:15,d} ⬛ <padding>', file=stderr)
+      progress.write(f'\x1B[1;30m{a.padding:15,d} ⬛ <padding>\x1B[0m', file=stderr)
 
   a.nextfilecb = nextfile_callback
   # Main processing
