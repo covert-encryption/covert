@@ -5,13 +5,32 @@ from math import log2
 from secrets import token_bytes
 
 ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
+B64_ALPHABET = b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
 
 def armor_decode(data):
   """Base64 decode."""
-  # Need to remove whitespace and backticks (if accidentally pasted) before adding padding
-  data = bytes(b for b in data if b not in b' \n\r\t`')
-  data = data.replace(b'-', b'+').replace(b'_', b'/')  # Support also url-safe base64
+  # Fix CRLF, remove any surrounding whitespace and code block markers, support also urlsafe
+  data = data.replace(b'\r\n', b'\n').strip(b'\t `\n').replace(b'-', b'+').replace(b'_', b'/')
+  if not data.isascii():
+    raise ValueError(f"Invalid armored encoding: data is not ASCII/Base64")
+  # Strip indent, trailing whitespace and empty lines
+  lines = [line for l in data.split(b'\n') if (line := l.strip())]
+  # Empty input means empty output (will cause an error elsewhere)
+  if not lines:
+    return b''
+  # Verify all lines
+  for i, line in enumerate(lines):
+    if any(ch not in B64_ALPHABET for ch in line):
+      raise ValueError(f"Invalid armored encoding: unrecognized data on line {i + 1}: {line!r}")
+  # Verify line lengths
+  l = len(lines[0])
+  for i, line in enumerate(lines[:-1]):
+    l2 = len(line)
+    if l2 < 76 or l2 % 4 or l2 != l:
+      raise ValueError(f"Invalid armored encoding: length {l2} of line {i + 1} is invalid")
+  # Not sure why we even bother to use the standard library after having handled all that...
+  data = b"".join(lines)
   padding = -len(data) % 4
   return b64decode(data + padding*b'=', validate=True)
 
