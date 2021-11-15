@@ -6,7 +6,6 @@ from urllib.parse import quote
 from urllib.request import urlopen
 
 import nacl.bindings as sodium
-from pysodium import crypto_pwhash_scryptsalsa208sha256
 
 from covert import bech, passphrase, util
 
@@ -222,10 +221,10 @@ def decode_sk_ssh(data):
 def decode_sk_minisign(keystr):
   data = b64decode(keystr)
   fmt, salt, ops, mem, token = struct.unpack('<6s32sQQ104s', data)
-  if fmt != b'EdScB2':
+  if fmt != b'EdScB2' or ops != 1 << 25 or mem != 1 << 30:
     raise ValueError(f'Not a (supported) MiniSign secret key {fmt=}')
   pw = util.encode(passphrase.ask('MiniSign passkey')[0])
-  out = crypto_pwhash_scryptsalsa208sha256(104, pw, salt, ops, mem)
+  out = sodium.crypto_pwhash_scryptsalsa208sha256_ll(pw, salt, n=1 << 20, r=8, p=1, maxmem=float('inf'), dklen=104)
   token = util.xor(out, token)
   keyid = token[:8]
   edsk = token[8:40]
