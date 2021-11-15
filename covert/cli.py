@@ -119,7 +119,7 @@ def main_enc(args):
   if not 0 <= padding <= 3.0:
     raise ValueError('Invalid padding specified. The valid range is 0 to 300 %.')
   passwords, vispw = [], []
-  if not (args.askpass or args.passwords or args.recipients or args.recipfiles or args.args.wideopen):
+  if not (args.askpass or args.passwords or args.recipients or args.recipfiles or args.wideopen):
     args.askpass = 1
   l = args.askpass + len(args.passwords)
   for i in range(args.askpass):
