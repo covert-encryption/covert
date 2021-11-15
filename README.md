@@ -1,6 +1,6 @@
-# Covert Encryption
+<img src="https://github.com/covert-encryption/covert/blob/main/docs/logo.webp?raw=true" width="220" alt="Logo" align="left">
 
-<img src="https://github.com/covert-encryption/covert/blob/main/docs/logo.webp?raw=true" width="140" alt="Logo" align="left">
+# Covert Encryption
 
 *A file and message encryptor with strong anonymity*
 
