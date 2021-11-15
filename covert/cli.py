@@ -236,6 +236,8 @@ def main_dec(args):
   total_size = os.path.getsize(args.files[0]) if args.files else 0
   if infile.isatty():
     data = util.armor_decode(tty.read_hidden("Encrypted message").encode())
+    if not data:
+      raise KeyboardInterrupt
     infile = BytesIO(data)
     total_size = len(data)
     del data

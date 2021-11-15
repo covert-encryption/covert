@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 def read_hidden(prompt):
   with terminal() as term:
-    term.write(f'{prompt}: ')
+    term.write(f'{prompt}: \x1B[1;30m')
     try:
       data = ""
       t = time.monotonic()
@@ -17,16 +17,17 @@ def read_hidden(prompt):
           elif key == "BACKSPACE":
             data = data[:-1]
           elif key == "ENTER":
+            # Handle multi-line pastes
             if time.monotonic() - t > 0.2:
               return data
             data += '\n'
           elif len(key) == 1:
             data += key
           t = time.monotonic()
-        term.write(f"\x1B7\x1B[1;30m  ({len(data)})\x1B[0m\x1B[K\x1B8")
+        term.write(f"\x1B7  ({len(data)}) \x1B8")
     finally:
       # Return to start of line and clear the prompt
-      term.write(f"\r\x1B[K")
+      term.write(f"\x1B[0m\r\x1B[K")
 
 
 @contextmanager
