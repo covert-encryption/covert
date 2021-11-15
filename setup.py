@@ -17,7 +17,7 @@ setup(
   "License :: Public Domain",
   "Operating System :: OS Independent",
   ],
-  install_requires=["pynacl>=1.4", "tqdm>=4.62", "msgpack>=1.0", "zxcvbn>=4.4"],
+  install_requires=["pynacl>=1.4", "tqdm>=4.62", "msgpack>=1.0", "zxcvbn>=4.4", "pysodium>=0.7.10"],
   include_package_data=True,
   entry_points=dict(console_scripts=["covert = covert.__main__:main"]),
 )
