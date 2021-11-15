@@ -16,14 +16,14 @@ Other encryption tools add unencrypted headers revealing the recipients and othe
 
 A message (base64 or binary) has no headers or anything else that could be recognized:
 ```
-th-WABpvMefcELoEoAZoGLS-4c5Touy37rX84MzY9QT_svERJclji6MC6NaZaN9LCu5mXx8srPa24A
+HDGKMFEo5cYHtUF1w9aNlX1lMmWJD3B7p8HoBoQZTNJGjg/nUOMqlXLspmmVO7PQj8Pe
 ```
 
-The program generates easy passphrases like `babychoicepricefixed` for the above.
+Covert generates easy passphrases like `pinkmuletibetdemand` for the above. The encoded message includes random padding to hide the length of the message and it is still shorter than others (e.g. `gpg` needs six lines instead of one and still reveals the exact length of the message, and it also claims that this passphrase is insecure while happily accepting very common passwords like `passw0rd` and `password1`).
 
 ## Try it!
 
-[Python](https://www.python.org/downloads/) `pip` will add `covert` on your system. decrypt the message to see what it says:
+[Python](https://www.python.org/downloads/) `pip` will add `covert` on your system. Decrypt the above message to see what it says:
 
 ```
 pip install covert
