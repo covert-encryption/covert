@@ -138,26 +138,18 @@ def main_enc(args):
   # Unique recipient keys sorted by keystr
   l = len(recipients)
   recipients = list(sorted(set(recipients), key=str))
+  if len(recipients) < l:
+    stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
   # Signatures
   identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr)]
   signatures = identities = list(sorted(set(identities), key=str))
-  if len(recipients) < l:
-    stderr.write(' ⚠️  Duplicate recipient keys dropped.\n')
   # Input files
   if not args.files or True in args.files:
     if stdin.isatty():
-      stderr.write(
-        f'\x1B[?1049h\x1B[1;1H\x1B[1m   〰 ENTER MESSAGE 〰 \x1B[0m  (Ctrl+{"Z" if os.name == "nt" else "D"} to finish)\n'
-      )
-      try:
-        stin = stdin.read(TTY_MAX_SIZE)
-      finally:
-        stderr.write(f"\x1B[?1049l\n")
-      if len(stin) == TTY_MAX_SIZE:
-        raise ValueError("Too large input by stdin TTY. Use files or pipes instead.")
+      data = tty.editor()
       # Prune surrounding whitespace
-      stin = '\n'.join([l.rstrip() for l in stin.split('\n')]).strip('\n')
-      stin = util.encode(stin)
+      data = '\n'.join([l.rstrip() for l in data.split('\n')]).strip('\n')
+      stin = util.encode(data)
     else:
       stin = stdin.buffer
     args.files = [stin] + [f for f in args.files if f != True]

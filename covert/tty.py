@@ -4,6 +4,58 @@ import time
 from contextlib import contextmanager
 
 
+def editor():
+  with fullscreen() as term:
+    term.write(f'\x1B[1;1H\x1B[1;44m   〰 ENTER MESSAGE 〰   (ESC to finish)\x1B[K\x1B[0m\n')
+    data = ""
+    row = col = 0
+    while True:
+      for key in term.reader():
+        lines = data.split("\n") + [""]
+        if key == 'ESC':
+          return data
+        elif key == 'BACKSPACE':
+          if col > 0:
+            col -= 1
+            lines[row] = lines[row][:col] + lines[row][col + 1:]
+          elif row > 0:
+            row -= 1
+            col = len(lines[row])
+            lines[row] += lines[row + 1]
+            del lines[row + 1]
+        elif key == 'LEFT':
+          if col > 0:
+            col -= 1
+          elif row > 0:
+            row -= 1
+            col = len(lines[row])
+        elif key == 'RIGHT':
+          if col < len(lines[row]):
+            col += 1
+          elif row < len(lines) - 1:
+            row += 1
+            col = 0
+        elif key == 'UP' and row > 0:
+          row -= 1
+          col = min(col, len(lines[row]))
+        elif key == 'DOWN' and row < len(lines) - 1:
+          row += 1
+          col = min(col, len(lines[row]))
+        elif key == 'ENTER':
+          lines.insert(row + 1, lines[row][col:])
+          lines[row] = lines[row][:col]
+          col = 0
+          row += 1
+        elif len(key) == 1:
+          lines[row] = lines[row][:col] + key + lines[row][col:]
+          col += 1
+        if not lines[-1]:
+          del lines[-1]
+        data = "\n".join(lines)
+      draw = data.replace('\n', "\x1B[K\n") + "\x1B[K\n\x1B[K"
+      term.write(f"\x1B[2;1H{draw}\x1B[{row+2};{col+1}H")
+
+
 def read_hidden(prompt):
   with terminal() as term:
     term.write(f'{prompt}: \x1B[1;30m')
