@@ -7,6 +7,7 @@ from secrets import token_bytes
 ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
 B64_ALPHABET = b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
+
 def armor_decode(data):
   """Base64 decode."""
   # Fix CRLF, remove any surrounding whitespace and code block markers, support also urlsafe
@@ -19,7 +20,7 @@ def armor_decode(data):
   if not lines:
     return b''
   # Verify all lines
-  for i, line in enumerate(lines[:-1]):
+  for i, line in enumerate(lines):
     if any(ch not in B64_ALPHABET for ch in line):
       raise ValueError(f"Invalid armored encoding: unrecognized data on line {i + 1}: {line!r}")
   # Verify line lengths

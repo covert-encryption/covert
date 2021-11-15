@@ -80,7 +80,9 @@ def run_decryption(infile, args, passwords, identities):
           f = open(name, 'wb')
         elif outdir is None:
           outdir = False
-          progress.write(" ▶️ \x1B[1;34m  The archive contains files. To extract, use \x1B[1;37m-o PATH\x1B[0m", file=stderr)
+          progress.write(
+            " ▶️ \x1B[1;34m  The archive contains files. To extract, use \x1B[1;37m-o PATH\x1B[0m", file=stderr
+          )
 
       # Next file
       if progress:
@@ -180,6 +182,7 @@ def main_enc(args):
     if not cur:
       a.random_padding(padding)
       progress.write(f'{a.padding:15,d} ⬛ <padding>', file=stderr)
+
   a.nextfilecb = nextfile_callback
   # Main processing
   with outf:
