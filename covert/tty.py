@@ -164,7 +164,7 @@ class Terminal:
   def reader_windows(self):
     while True:
       ch = msvcrt.getwch()
-      if ch == '\x00':
+      if ch == '\x00' or ch == 'à':
         ch = msvcrt.getwch()
         if ch == 'H': yield 'UP'
         elif ch == 'P': yield 'DOWN'
