@@ -141,25 +141,16 @@ def ask(prompt, create=False):
 
 
 def pwhints(pwd):
-  if not pwd:
-    # Workaround zxcvbn crash on empty password
-    warn = ""
-    sugg = [
-      "Use a few words, avoid common phrases",
-      "No need for symbols, digits, or uppercase letters",
-    ]
-    guesses = 1
-  else:
-    maxlen = 20  # zxcvbn gets slow with long passwords
-    z = zxcvbn(pwd[:maxlen], user_inputs=argv)
-    fb = z["feedback"]
-    warn = fb["warning"]
-    sugg = fb["suggestions"]
-    guesses = float(z["guesses"])
-    if len(pwd) > maxlen:
-      # Account for characters we didn't let zxcvbn process
-      guesses *= len(set(pwd))**(len(pwd) - maxlen)
-      del sugg[:]
+  maxlen = 20  # zxcvbn gets slow with long passwords
+  z = zxcvbn(pwd[:maxlen], user_inputs=argv)
+  fb = z["feedback"]
+  warn = fb["warning"]
+  sugg = fb["suggestions"]
+  guesses = float(z["guesses"])
+  if len(pwd) > maxlen:
+    # Account for characters we didn't let zxcvbn process
+    guesses *= len(set(pwd))**(len(pwd) - maxlen)
+    del sugg[:]
   # Estimate the time for our strong hashing (400 ms, 100 cores, 20 GB)
   t = .4 / 100 * guesses
   # Even stronger hashing of short passwords
