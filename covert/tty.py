@@ -2,6 +2,62 @@ import io
 import os
 import time
 from contextlib import contextmanager
+from shutil import get_terminal_size
+
+
+def editor():
+  with fullscreen() as term:
+    term.write(f'\x1B[1;1H\x1B[1;44m   〰 ENTER MESSAGE 〰   (ESC to finish)\x1B[K\x1B[0m\n')
+    data = ""
+    startrow = row = col = 0
+    while True:
+      for key in term.reader():
+        lines = data.split("\n") + [""]
+        if key == 'ESC':
+          return data
+        elif key == 'BACKSPACE':
+          if col > 0:
+            col -= 1
+            lines[row] = lines[row][:col] + lines[row][col + 1:]
+          elif row > 0:
+            row -= 1
+            col = len(lines[row])
+            lines[row] += lines[row + 1]
+            del lines[row + 1]
+        elif key == 'LEFT':
+          if col > 0:
+            col -= 1
+          elif row > 0:
+            row -= 1
+            col = len(lines[row])
+        elif key == 'RIGHT':
+          if col < len(lines[row]):
+            col += 1
+          elif row < len(lines) - 1:
+            row += 1
+            col = 0
+        elif key == 'UP' and row > 0:
+          row -= 1
+          col = min(col, len(lines[row]))
+        elif key == 'DOWN' and row < len(lines) - 1:
+          row += 1
+          col = min(col, len(lines[row]))
+        elif key == 'ENTER':
+          lines.insert(row + 1, lines[row][col:])
+          lines[row] = lines[row][:col]
+          col = 0
+          row += 1
+        elif len(key) == 1:
+          lines[row] = lines[row][:col] + key + lines[row][col:]
+          col += 1
+        if not lines[-1]:
+          del lines[-1]
+        data = "\n".join(lines)
+      win = get_terminal_size()
+      startrow = min(max(0, row - 1), startrow)
+      startrow = max(row - win.lines + 2, startrow)
+      draw = "\x1B[K\n".join(l[:win.columns - 1] for l in data.split("\n")[startrow : startrow + win.lines - 1])
+      term.write(f"\x1B[2;1H{draw}\x1B[J\x1B[{row - startrow + 2};{col+1}H")
 
 
 def read_hidden(prompt):
@@ -108,7 +164,7 @@ class Terminal:
   def reader_windows(self):
     while True:
       ch = msvcrt.getwch()
-      if ch == '\x00':
+      if ch == '\x00' or ch == 'à':
         ch = msvcrt.getwch()
         if ch == 'H': yield 'UP'
         elif ch == 'P': yield 'DOWN'

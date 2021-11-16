@@ -1,4 +1,3 @@
-import random
 import secrets
 from contextlib import suppress
 from hashlib import sha512
@@ -17,8 +16,16 @@ MINLEN = 8  # Bytes, not characters
 
 def generate(n=4, sep=""):
   """Generate a password of random words without repeating any word."""
-  random.seed(secrets.token_bytes(32))
-  return sep.join(random.sample(words, n))
+  # Reject if zxcvbn thinks it is much worse than expected, e.g. the random
+  # words formed a common expression, about 1 % of all that are generated.
+  # This improves security against password crackers that use other wordlists
+  # and does not hurt with ones who use ours (who can't afford zxcvbn anyway).
+  while True:
+    wl = list(words)
+    pw = sep.join(wl.pop(secrets.randbelow(len(wl))) for i in range(n))
+    if 4 * zxcvbn(pw)["guesses"] > len(words)**n:
+      return pw
+    print(pw)
 
 
 def costfactor(pwd: bytes):
@@ -83,7 +90,7 @@ def autocomplete(pwd, pos):
 def ask(prompt, create=False):
   with fullscreen() as term:
     autohint = ''
-    pwd = ''
+    pwd = ''  # nosec
     pos = 0
     visible = False
     while True:

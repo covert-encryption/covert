@@ -6,6 +6,7 @@ from pathlib import Path
 from sys import stderr, stdin, stdout
 from time import perf_counter
 
+import pyperclip
 from tqdm import tqdm
 
 from covert import passphrase, pubkey, tty, util
@@ -99,7 +100,8 @@ def run_decryption(infile, args, passwords, identities):
     progress.close()
   # Print any messages
   for i, m in enumerate(messages):
-    if stdout.isatty():
+    pretty = stdout.isatty()
+    if pretty:
       stderr.write("\x1B[1m 💬\n\x1B[1;34m")
       stderr.flush()
       # Replace dangerous characters
@@ -107,12 +109,9 @@ def run_decryption(infile, args, passwords, identities):
     try:
       print(m)
     finally:
-      try:
-        if stdout.isatty():
-          stderr.write(f"\x1B[0m")
-          stderr.flush()
-      except Exception:
-        pass
+      if pretty:
+        stderr.write(f"\x1B[0m")
+        stderr.flush()
 
 
 def main_enc(args):
@@ -138,26 +137,18 @@ def main_enc(args):
   # Unique recipient keys sorted by keystr
   l = len(recipients)
   recipients = list(sorted(set(recipients), key=str))
+  if len(recipients) < l:
+    stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
   # Signatures
   identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr)]
   signatures = identities = list(sorted(set(identities), key=str))
-  if len(recipients) < l:
-    stderr.write(' ⚠️  Duplicate recipient keys dropped.\n')
   # Input files
   if not args.files or True in args.files:
     if stdin.isatty():
-      stderr.write(
-        f'\x1B[?1049h\x1B[1;1H\x1B[1m   〰 ENTER MESSAGE 〰 \x1B[0m  (Ctrl+{"Z" if os.name == "nt" else "D"} to finish)\n'
-      )
-      try:
-        stin = stdin.read(TTY_MAX_SIZE)
-      finally:
-        stderr.write(f"\x1B[?1049l\n")
-      if len(stin) == TTY_MAX_SIZE:
-        raise ValueError("Too large input by stdin TTY. Use files or pipes instead.")
+      data = tty.editor()
       # Prune surrounding whitespace
-      stin = '\n'.join([l.rstrip() for l in stin.split('\n')]).strip('\n')
-      stin = util.encode(stin)
+      data = '\n'.join([l.rstrip() for l in data.split('\n')]).strip('\n')
+      stin = util.encode(data)
     else:
       stin = stdin.buffer
     args.files = [stin] + [f for f in args.files if f != True]
@@ -205,28 +196,31 @@ def main_enc(args):
         lock += f"    {methods}"
       if args.outfile:
         lock += f"  💾 {args.outfile}\n"
+      elif args.paste:
+        lock += f"  📋 copied\n"
       out = f"\n\x1B[1m{lock}\x1B[0m\n"
       stderr.write(out)
       stderr.flush()
     if outf is not realoutf:
       outf.seek(0)
       data = outf.read()
+      data = util.armor_encode(data)
     if outf is not realoutf:
+      if args.paste:
+        pyperclip.copy(f"```\n{data.decode()}\n```\n")
+        return
       with realoutf:
-        if realoutf.isatty():
+        pretty = realoutf.isatty()
+        if pretty:
           stderr.write("\x1B[1;30m```\x1B[0;34m\n")
           stderr.flush()
         try:
-          data = util.armor_encode(data)
           realoutf.write(data + b"\n")
           realoutf.flush()
         finally:
-          try:
-            if realoutf.isatty():
-              stderr.write("\x1B[1;30m```\x1B[0m\n")
-              stderr.flush()
-          except Exception:
-            pass
+          if pretty:
+            stderr.write("\x1B[1;30m```\x1B[0m\n")
+            stderr.flush()
 
 
 def main_dec(args):
@@ -238,7 +232,7 @@ def main_dec(args):
   # If ASCII armored or TTY, read all input immediately (assumed to be short enough)
   total_size = os.path.getsize(args.files[0]) if args.files else 0
   if infile.isatty():
-    data = util.armor_decode(tty.read_hidden("Encrypted message").encode())
+    data = util.armor_decode((pyperclip.paste() if args.paste else tty.read_hidden("Encrypted message")).encode())
     if not data:
       raise KeyboardInterrupt
     infile = BytesIO(data)

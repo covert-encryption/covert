@@ -15,7 +15,6 @@ BS = (1 << 20) - 19  # The maximum block size to use (only affects encryption)
 
 
 def decrypt_file(auth, f):
-  pks = []  # FIXME: Needs to be loaded with signatures to verify (from archive)
 
   def add_to_queue(p, blklen, nblk):
     nonlocal pos
@@ -74,22 +73,24 @@ def decrypt_file(auth, f):
         add_to_queue(p, nextlen, nblk)
 
   if False:
-    # Signature writing (proto)
-    keys = [pubkey.sk_to_pk(pubkey.decode_sk(sk)) for sk in identities]
-    keys += [pubkey.decode_pk(pk) for pk in pks]
+    # Signature verification (proto)
     if mmapped:
       while len(ciphertext) - pos >= 80:
         sigblock = ciphertext[pos:pos + 80]
         pos += 80
-        for pk in keys:
-          nsig = sha512(blkhash + pk).digest()[:12]
+        for key in signatures:
+          nsig = sha512(blkhash + key.pk).digest()[:12]
           ksig = blkhash[:32]
-          signature = chacha.decrypt(sigblock, None, nsig, ksig)
           try:
-            sign.verify(signature, blkhash, pk)
+            signature = chacha.decrypt(sigblock, None, nsig, ksig)
+          except CryptoError:
+            stderr.write(f"Signature failed for {key}\n")
+            continue
+          try:
+            sign.verify(signature, blkhash, key.edpk)
             stderr.write(f"Verified signature {key}\n")
-          except Exception:
-            pass
+          except CryptoError:
+            stderr.write(f"Forged signature, not verified for {key}\n")
 
 
 class Block:
@@ -168,10 +169,8 @@ def encrypt_file(auth, blockinput):
     yield block
 
   # Add signature blocks
-  for sk in identities:
-    sk = pubkey.decode_sk(sk)
-    pk = pubkey.sk_to_pk(sk)
-    signature = sign.signature(sk, blkhash)
-    nsig = sha512(blkhash + pk).digest()[:12]
+  for key in identities:
+    signature = sign.signature(key.edsk, blkhash)
+    nsig = sha512(blkhash + key.pk).digest()[:12]
     ksig = blkhash[:32]
     yield chacha.encrypt(signature, None, nsig, ksig)
