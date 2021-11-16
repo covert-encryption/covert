@@ -2,7 +2,7 @@ import random
 import unicodedata
 from base64 import b64decode, b64encode
 from math import log2
-from secrets import token_bytes
+from secrets import choice, token_bytes
 
 ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
 B64_ALPHABET = b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -40,7 +40,7 @@ def armor_encode(data):
   data = b64encode(data).rstrip(b'=')
   if len(data) > ARMOR_MAX_SINGLELINE:
     # Make fingerprinting the encoding by line lengths a bit harder while still using >76
-    splitlen = random.choice(range(76, 121, 4))
+    splitlen = choice(range(76, 121, 4))
     data = b'\n'.join([data[i:i + splitlen] for i in range(0, len(data), splitlen)])
   return data
 

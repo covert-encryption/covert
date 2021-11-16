@@ -99,7 +99,8 @@ def run_decryption(infile, args, passwords, identities):
     progress.close()
   # Print any messages
   for i, m in enumerate(messages):
-    if stdout.isatty():
+    pretty = stdout.isatty()
+    if pretty:
       stderr.write("\x1B[1m 💬\n\x1B[1;34m")
       stderr.flush()
       # Replace dangerous characters
@@ -107,12 +108,9 @@ def run_decryption(infile, args, passwords, identities):
     try:
       print(m)
     finally:
-      try:
-        if stdout.isatty():
-          stderr.write(f"\x1B[0m")
-          stderr.flush()
-      except Exception:
-        pass
+      if pretty:
+        stderr.write(f"\x1B[0m")
+        stderr.flush()
 
 
 def main_enc(args):
@@ -213,7 +211,8 @@ def main_enc(args):
       data = outf.read()
     if outf is not realoutf:
       with realoutf:
-        if realoutf.isatty():
+        pretty = realoutf.isatty()
+        if pretty:
           stderr.write("\x1B[1;30m```\x1B[0;34m\n")
           stderr.flush()
         try:
@@ -221,12 +220,9 @@ def main_enc(args):
           realoutf.write(data + b"\n")
           realoutf.flush()
         finally:
-          try:
-            if realoutf.isatty():
-              stderr.write("\x1B[1;30m```\x1B[0m\n")
-              stderr.flush()
-          except Exception:
-            pass
+          if pretty:
+            stderr.write("\x1B[1;30m```\x1B[0m\n")
+            stderr.flush()
 
 
 def main_dec(args):

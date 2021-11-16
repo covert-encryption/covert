@@ -1,4 +1,3 @@
-import random
 import secrets
 from contextlib import suppress
 from hashlib import sha512
@@ -17,8 +16,8 @@ MINLEN = 8  # Bytes, not characters
 
 def generate(n=4, sep=""):
   """Generate a password of random words without repeating any word."""
-  random.seed(secrets.token_bytes(32))
-  return sep.join(random.sample(words, n))
+  wl = list(words)
+  return sep.join(wl.pop(secrets.randbelow(len(wl))) for i in range(n))
 
 
 def costfactor(pwd: bytes):
@@ -83,7 +82,7 @@ def autocomplete(pwd, pos):
 def ask(prompt, create=False):
   with fullscreen() as term:
     autohint = ''
-    pwd = ''
+    pwd = ''  # nosec
     pos = 0
     visible = False
     while True:

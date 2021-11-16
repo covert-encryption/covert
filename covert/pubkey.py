@@ -101,7 +101,8 @@ def read_pk_file(keystr):
   ghuser = None
   if keystr.startswith("github:"):
     ghuser = keystr[7:]
-    with urlopen(f"https://github.com/{quote(ghuser, safe='')}.keys") as resp:
+    url = f"https://github.com/{quote(ghuser, safe='')}.keys"
+    with urlopen(url) as resp:  # nosec
       data = resp.read()
   elif not os.path.isfile(keystr):
     raise ValueError("Keyfile {keystr} not found")
