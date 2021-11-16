@@ -15,6 +15,7 @@ Encryption options:
   -i --identity FN  Sign the message using secret keys (file or key)
   -o --output FN    Encrypted file to output (binary unless -a is used)
   -a --armor        Encode to Base64 format (default if output is console)
+  -A                Auto copy&paste: ciphertext is copied
   --pad PERCENT     Random padding preferred amount (0 disable, 5 default)
 
 Filenames or folders given are added to the archive, omitting full paths.
@@ -25,6 +26,7 @@ dechelp = """\
 Decryption options:
   -o --output PATH  A folder/ to extract files or a file for message output
   -i --identity FN  Use the given keyfile or secret key instead of password
+  -A                Auto copy&paste: ciphertext is pasted
 """
 
 cmdhelp = f"""\
@@ -60,6 +62,7 @@ class Args:
     self.identities = []
     self.padding = "5"
     self.armor = None
+    self.paste = None
     self.debug = None
 
 
@@ -72,13 +75,16 @@ encargs = dict(
   identities='-i --identity'.split(),
   outfile='-o --out --output'.split(),
   armor='-a --armor'.split(),
+  paste='-A'.split(),
   padding='--pad --padding'.split(),
   debug='--debug'.split(),
 )
 
 decargs = dict(
+  passwords='--password'.split(),
   identities='-i --identity'.split(),
   outfile='-o --out --output'.split(),
+  paste='-A'.split(),
   debug='--debug'.split(),
 )
 

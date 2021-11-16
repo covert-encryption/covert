@@ -6,6 +6,7 @@ from pathlib import Path
 from sys import stderr, stdin, stdout
 from time import perf_counter
 
+import pyperclip
 from tqdm import tqdm
 
 from covert import passphrase, pubkey, tty, util
@@ -195,20 +196,25 @@ def main_enc(args):
         lock += f"    {methods}"
       if args.outfile:
         lock += f"  💾 {args.outfile}\n"
+      elif args.paste:
+        lock += f"  📋 copied\n"
       out = f"\n\x1B[1m{lock}\x1B[0m\n"
       stderr.write(out)
       stderr.flush()
     if outf is not realoutf:
       outf.seek(0)
       data = outf.read()
+      data = util.armor_encode(data)
     if outf is not realoutf:
+      if args.paste:
+        pyperclip.copy(f"```\n{data.decode()}\n```\n")
+        return
       with realoutf:
         pretty = realoutf.isatty()
         if pretty:
           stderr.write("\x1B[1;30m```\x1B[0;34m\n")
           stderr.flush()
         try:
-          data = util.armor_encode(data)
           realoutf.write(data + b"\n")
           realoutf.flush()
         finally:
@@ -226,7 +232,7 @@ def main_dec(args):
   # If ASCII armored or TTY, read all input immediately (assumed to be short enough)
   total_size = os.path.getsize(args.files[0]) if args.files else 0
   if infile.isatty():
-    data = util.armor_decode(tty.read_hidden("Encrypted message").encode())
+    data = util.armor_decode((pyperclip.paste() if args.paste else tty.read_hidden("Encrypted message")).encode())
     if not data:
       raise KeyboardInterrupt
     infile = BytesIO(data)
