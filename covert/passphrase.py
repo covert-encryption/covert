@@ -16,8 +16,16 @@ MINLEN = 8  # Bytes, not characters
 
 def generate(n=4, sep=""):
   """Generate a password of random words without repeating any word."""
-  wl = list(words)
-  return sep.join(wl.pop(secrets.randbelow(len(wl))) for i in range(n))
+  # Reject if zxcvbn thinks it is much worse than expected, e.g. the random
+  # words formed a common expression, about 1 % of all that are generated.
+  # This improves security against password crackers that use other wordlists
+  # and does not hurt with ones who use ours (who can't afford zxcvbn anyway).
+  while True:
+    wl = list(words)
+    pw = sep.join(wl.pop(secrets.randbelow(len(wl))) for i in range(n))
+    if 4 * zxcvbn(pw)["guesses"] > len(words)**n:
+      return pw
+    print(pw)
 
 
 def costfactor(pwd: bytes):
