@@ -4,48 +4,39 @@ from sys import stderr, stdout
 import covert
 from covert.cli import main_benchmark, main_dec, main_enc
 
+hdrhelp = """\
+Usage:
+  covert enc [files] [recipients] [signatures] [-A | -o unsuspicious.dat [-a]]
+  covert dec [-A | unsuspicious.dat] [-i id_ed25519] [-o filesfolder]
+  covert benchmark
+
+Note: covert enc/dec without arguments ask for password and message. Files and
+folders get attached together with a message if 'enc -' is specified.
+"""
+
 enchelp = """\
-Encryption options:
-  -p, --passphrase  Ask for passphrase (default if no other recipients)
-  -r --recipient K  Encrypt to the specified public key: RW…, AAAA…, age1…
-  -R --keyfile FN   Read recipients from a local keyfile, or:
-                      github:foo - Download foo's SSH keys from Github
-  --wide-open       No authentication required, anyone can open the file
-
-  -i --identity FN  Sign the message using secret keys (file or key)
-  -o --output FN    Encrypted file to output (binary unless -a is used)
-  -a --armor        Encode to Base64 format (default if output is console)
+  -p                Passphrase recipient (default)
+  --wide-open       Anyone can open the file (no recipients)
+  -r PKEY -R FILE   Recipient pubkey, .pub file or github:username
+  -i SKEY           Sign with a secret key (string token or id file)
   -A                Auto copy&paste: ciphertext is copied
-  --pad PERCENT     Random padding preferred amount (0 disable, 5 default)
-
-Filenames or folders given are added to the archive, omitting full paths.
-A message with file attachments can be written by adding a hyphen '-'.
+  -o FILENAME       Encrypted file to output (binary unless -a is used)
+  --pad PERCENT     Preferred padding amount (default 5 %)
 """
 
 dechelp = """\
-Decryption options:
-  -o --output PATH  A folder/ to extract files or a file for message output
-  -i --identity FN  Use the given keyfile or secret key instead of password
   -A                Auto copy&paste: ciphertext is pasted
+  -i SKEY           Decrypt with secret key (token or file)
+  -o FILEFOLDER     Extract any attached files to
 """
 
 cmdhelp = f"""\
 Covert {covert.__version__} - A file and message encryptor with strong anonymity
  💣  Things encrypted with this developer preview mayn't be readable evermore
 
-Usage:
-  covert enc [-p | -r PUBKEY | -R KEYFILE]... [-o OUTPUT] [FILE | DIR]...
-  covert dec [-i PRIVKEY]... [INPUT] [-o OUTPUT]
-  covert benchmark
-
-Note: covert enc/dec with no other arguments will use the console.
-
+{hdrhelp}
 {enchelp}
 {dechelp}
-Example:
-  $ minisign -G -p foo.pub -s foo.key
-  $ covert enc -R foo.pub - pictures/ -o unsuspicious.dat
-  $ covert dec -i foo.key unsuspicious.dat -o new_pictures/
 """
 
 
@@ -108,11 +99,11 @@ def argparse():
   args = Args()
   # Support a few other forms for Age etc. compatibility (but only as the first arg)
   if av[0].lower() in ('enc', 'encrypt', '-e', '--encrypt'):
-    args.mode, ad, modehelp = 'enc', encargs, enchelp
+    args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
   elif av[0].lower() in ('dec', 'decrypt', '-d', '--decrypt'):
-    args.mode, ad, modehelp = 'dec', decargs, dechelp
+    args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
   elif av[0].lower() in ('bench', 'benchmark'):
-    args.mode, ad, modehelp = 'benchmark', benchargs, "Benchmark mode takes no arguments\n"
+    args.mode, ad, modehelp = 'benchmark', benchargs, f"{hdrhelp}"
   elif next((k for k, v in encargs.items() if av[0] in v), None) is not None:
     args.mode, ad, modehelp = 'enc', encargs, enchelp
     av.insert(0, None)
