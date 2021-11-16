@@ -2,13 +2,14 @@ import io
 import os
 import time
 from contextlib import contextmanager
+from shutil import get_terminal_size
 
 
 def editor():
   with fullscreen() as term:
     term.write(f'\x1B[1;1H\x1B[1;44m   〰 ENTER MESSAGE 〰   (ESC to finish)\x1B[K\x1B[0m\n')
     data = ""
-    row = col = 0
+    startrow = row = col = 0
     while True:
       for key in term.reader():
         lines = data.split("\n") + [""]
@@ -52,8 +53,11 @@ def editor():
         if not lines[-1]:
           del lines[-1]
         data = "\n".join(lines)
-      draw = data.replace('\n', "\x1B[K\n") + "\x1B[K\n\x1B[K"
-      term.write(f"\x1B[2;1H{draw}\x1B[{row+2};{col+1}H")
+      win = get_terminal_size()
+      startrow = min(max(0, row - 1), startrow)
+      startrow = max(row - win.lines + 2, startrow)
+      draw = "\x1B[K\n".join(l[:win.columns - 1] for l in data.split("\n")[startrow : startrow + win.lines - 1])
+      term.write(f"\x1B[2;1H{draw}\x1B[J\x1B[{row - startrow + 2};{col+1}H")
 
 
 def read_hidden(prompt):
