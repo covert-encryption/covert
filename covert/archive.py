@@ -75,7 +75,7 @@ class Archive:
 
   def encodeindex(self):
     """Choose format and return index bytes."""
-    if not self.format and len(self.flist) == 1 and list(self.flist[0].keys()) == ['s']:
+    if not self.format and list(self.index.keys()) == ['f'] and len(self.flist) == 1 and list(self.flist[0].keys()) == ['s']:
       # Now we can and want to use the short format
       self.format = 0
       return msgpack.packb(self.index['f'][0]['s'])

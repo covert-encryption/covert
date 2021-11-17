@@ -14,7 +14,7 @@ from covert.util import noncegen
 BS = (1 << 20) - 19  # The maximum block size to use (only affects encryption)
 
 
-def decrypt_file(auth, f):
+def decrypt_file(auth, f, a):
 
   def add_to_queue(p, blklen, nblk):
     nonlocal pos
@@ -33,7 +33,8 @@ def decrypt_file(auth, f):
     ciphertext = memoryview(bytearray((0xFFFFFF+19) * workers))
     filelen = f.readinto(ciphertext[:1024])
   block, pos, key, nonce = decrypt_header(ciphertext[:min(filelen, 1024)], auth)
-  blkhash = sha512(ciphertext[:pos]).digest()
+  filepos = pos
+  blkhash = sha512(ciphertext[pos - 16:pos]).digest()
   executor = ThreadPoolExecutor(max_workers=workers)
   q = collections.deque()
   nextlen = int.from_bytes(block[-3:], "little") + 19
@@ -59,6 +60,7 @@ def decrypt_file(auth, f):
         block = memoryview(fut.result())
         nextlen = int.from_bytes(block[-3:], "little") + 19
         blkhash = sha512(blkhash + ciphertext[p + blklen - 16:p + blklen]).digest()
+        filepos += len(block) + 16
         yield block[:-3]
         if len(q) < workers:
           break
@@ -72,25 +74,29 @@ def decrypt_file(auth, f):
         nonce = noncegen(nblk)
         add_to_queue(p, nextlen, nblk)
 
-  if False:
-    # Signature verification (proto)
-    if mmapped:
-      while len(ciphertext) - pos >= 80:
-        sigblock = ciphertext[pos:pos + 80]
-        pos += 80
-        for key in signatures:
-          nsig = sha512(blkhash + key.pk).digest()[:12]
-          ksig = blkhash[:32]
-          try:
-            signature = chacha.decrypt(sigblock, None, nsig, ksig)
-          except CryptoError:
-            stderr.write(f"Signature failed for {key}\n")
-            continue
-          try:
-            sign.verify(signature, blkhash, key.edpk)
-            stderr.write(f"Verified signature {key}\n")
-          except CryptoError:
-            stderr.write(f"Forged signature, not verified for {key}\n")
+  a.filehash = blkhash
+  a.signatures = []
+  # Signature verification
+  if a.index.get('s'):
+    signatures = [pubkey.Key(edpk=k) for k in a.index['s']]
+    for key in signatures:
+      if mmapped:
+        sigblock = ciphertext[filepos:filepos + 80]
+      else:
+        sigblock = ciphertext[filepos:filepos + 80]
+        filepos += 80
+      nsig = sha512(blkhash + key.pk).digest()[:12]
+      ksig = blkhash[:32]
+      try:
+        signature = chacha.decrypt(sigblock, None, nsig, ksig)
+      except CryptoError:
+        a.signatures.append((False, key, 'Signature corrupted or data manipulated'))
+        continue
+      try:
+        sign.verify(key, blkhash, signature)
+        a.signatures.append((True, key, 'Signature verified'))
+      except CryptoError:
+        a.signatures.append((False, key, 'Forged signature'))
 
 
 class Block:
@@ -127,13 +133,13 @@ class Block:
     return self.cipher
 
 
-def encrypt_file(auth, blockinput):
+def encrypt_file(auth, blockinput, a):
   identities = auth[3]
   header, nonce, key = encrypt_header(auth)
   block = Block(maxlen=1024 - len(header) - 19, aad=header)
   queue = deque()
   yield header
-  blkhash = sha512(header).digest()
+  blkhash = b""
 
   with ThreadPoolExecutor(max_workers=8) as executor:
     futures = deque()
@@ -168,9 +174,10 @@ def encrypt_file(auth, blockinput):
     blkhash = sha512(blkhash + block[-16:]).digest()
     yield block
 
+  a.filehash = blkhash
   # Add signature blocks
   for key in identities:
-    signature = sign.signature(key.edsk, blkhash)
+    signature = sign.signature(key, blkhash)
     nsig = sha512(blkhash + key.pk).digest()[:12]
     ksig = blkhash[:32]
     yield chacha.encrypt(signature, None, nsig, ksig)
