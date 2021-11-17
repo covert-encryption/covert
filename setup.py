@@ -18,8 +18,7 @@ setup(
   "Operating System :: OS Independent",
   ],
   install_requires=[
-    "pynacl>=1.4", "tqdm>=4.62", "msgpack>=1.0", "pyperclip>=1.8",
-    "zxcvbn @ git+https://github.com/covert-encryption/zxcvbn-python.git#egg=zxcvbn",
+    "pynacl>=1.4", "tqdm>=4.62", "msgpack>=1.0", "pyperclip>=1.8", "zxcvbn-covert>=5.0",
   ],
   include_package_data=True,
   entry_points=dict(console_scripts=["covert = covert.__main__:main"]),
