@@ -6,7 +6,7 @@
 
 * **ChaCha20-Poly1305** stream cipher with authentication
 * **Argon2** secures shorter passwords against cracking
-* **Curve25519** public key encrypt & sign with [SSH](https://medium.com/risan/upgrade-your-ssh-key-to-ed25519-c6e8d60d3c54), [Age](https://age-encryption.org/) and [MiniSign](https://jedisct1.github.io/minisign/) keys
+* **Curve25519** public key encrypt & sign with [SSH](https://medium.com/risan/upgrade-your-ssh-key-to-ed25519-c6e8d60d3c54), [Age](https://age-encryption.org/) and [Minisign](https://jedisct1.github.io/minisign/) keys
 
 ## Anonymity, privacy and authenticity
 
@@ -45,7 +45,7 @@ Age | Go | chacha20-poly1305 | encrypt with auth
 Rage | Rust | chacha20-poly1305 | encrypt with auth
 OpenSSL | C | aes256-ctr (hw accelerated) | encrypt only
 GPG | C | aes128-cfb, deflate | encrypt with auth and compression
-MiniSign | C | blake2b-512 ed25519 | signature only (for reference)
+Minisign | C | blake2b-512 ed25519 | signature only (for reference)
 
 ## A few interesting features
 

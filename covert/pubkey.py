@@ -185,7 +185,7 @@ def decode_sk(keystr):
   # Age secret keys in Bech32 encoding
   if keystr.lower().startswith("age-secret-key-"):
     return decode_age_sk(keystr)
-  # Magic for MiniSign
+  # Magic for Minisign
   if keystr.startswith('RWRTY0Iy'):
     return decode_sk_minisign(keystr)
   # Plain Curve25519 key (WireGuard)
@@ -226,12 +226,12 @@ def decode_sk_minisign(keystr, pw=None):
       return decode_sk_minisign(keystr, b'')
     except ValueError:
       pass
-    pw = util.encode(passphrase.ask('MiniSign passkey')[0])
+    pw = util.encode(passphrase.ask('Minisign passkey')[0])
     return decode_sk_minisign(keystr, pw)
   data = b64decode(keystr)
   fmt, salt, ops, mem, token = struct.unpack('<6s32sQQ104s', data)
   if fmt != b'EdScB2' or ops != 1 << 25 or mem != 1 << 30:
-    raise ValueError(f'Not a (supported) MiniSign secret key {fmt=}')
+    raise ValueError(f'Not a (supported) Minisign secret key {fmt=}')
   out = sodium.crypto_pwhash_scryptsalsa208sha256_ll(pw, salt, n=1 << 20, r=8, p=1, maxmem=float('inf'), dklen=104)
   token = util.xor(out, token)
   keyid, edsk, edpk, csum = struct.unpack('8s32s32s32s', token)
@@ -239,7 +239,7 @@ def decode_sk_minisign(keystr, pw=None):
   sodium.crypto_generichash.generichash_blake2b_update(b2state, fmt[:2] + keyid + edsk + edpk)
   csum2 = sodium.crypto_generichash.generichash_blake2b_final(b2state)
   if csum != csum2:
-    raise ValueError('Unable to decrypt MiniSign secret key')
+    raise ValueError('Unable to decrypt Minisign secret key')
   return Key(edsk=edsk, edpk=edpk)
 
 
