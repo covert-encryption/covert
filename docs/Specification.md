@@ -78,7 +78,7 @@ Signatures may be added after the otherwise final block, or as separate detached
 Rather than hashing all the data, the Poly1305 tags already calculated for each block are used. This is far faster than running the slow hash function over the entire data and yet provides equal protection.
 
 ```python
-h = sha512(header)
+h = ""
 for ciphertext in blocks:
     h = sha512(h + ciphertext[-16:])  # Poly1305 tag
 filehash = h
