@@ -5,12 +5,14 @@ import nacl.bindings as sodium
 from nacl.exceptions import BadSignatureError
 
 
-def signature(presk, message):
-  edpk, edsk = calculate_key_pair(presk)
-  return sodium.crypto_sign(message, presk + edpk)[:64]
+def signature(key, message):
+  #edpk, edsk = calculate_key_pair(presk)
+  return sodium.crypto_sign(message, key.edsk + key.edpk)[:64]
 
 
-def verify(pk, message, signature):
+def verify(key, message, signature):
+  return sodium.crypto_sign_open(bytes(signature + message), key.edpk)
+  # FIXME
   edpk = convert_mont(pk)
   try:
     return sodium.crypto_sign_open(signature + message, edpk)

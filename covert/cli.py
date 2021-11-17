@@ -23,7 +23,7 @@ def run_decryption(infile, args, passwords, identities):
   outdir = None
   f = None
   messages = []
-  for data in a.decode(decrypt_file((passwords, identities), infile)):
+  for data in a.decode(decrypt_file((passwords, identities), infile, a)):
     if isinstance(data, dict):
       # Header parsed, check the file list
       for i, infile in enumerate(a.flist):
@@ -99,8 +99,8 @@ def run_decryption(infile, args, passwords, identities):
   if progress:
     progress.close()
   # Print any messages
+  pretty = stdout.isatty()
   for i, m in enumerate(messages):
-    pretty = stdout.isatty()
     if pretty:
       stderr.write("\x1B[1m 💬\n\x1B[1;34m")
       stderr.flush()
@@ -112,8 +112,13 @@ def run_decryption(infile, args, passwords, identities):
       if pretty:
         stderr.write(f"\x1B[0m")
         stderr.flush()
-
-
+  # Print signatures
+  stderr.write(f' 🔷 File hash: {a.filehash[:12].hex()}\n')
+  for valid, key, text in a.signatures:
+    if valid:
+      stderr.write(f" ✅ {key} {text}\n")
+    else:
+      stderr.write(f"\x1B[1;31m ❌ {key} {text}\x1B[0m\n")
 def main_enc(args):
   vispw = []
   padding = .01 * float(args.padding) if args.padding is not None else .05
@@ -140,7 +145,7 @@ def main_enc(args):
   if len(recipients) < l:
     stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
   # Signatures
-  identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr)]
+  identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk]
   signatures = identities = list(sorted(set(identities), key=str))
   # Input files
   if not args.files or True in args.files:
@@ -154,6 +159,8 @@ def main_enc(args):
     args.files = [stin] + [f for f in args.files if f != True]
   a = Archive()
   a.file_index(args.files)
+  if signatures:
+    a.index['s'] = [s.edpk for s in signatures]
   # Output files
   realoutf = open(args.outfile, "wb") if args.outfile else stdout.buffer
   if args.armor or not args.outfile and stdout.isatty():
@@ -180,7 +187,7 @@ def main_enc(args):
     with tqdm(
       total=a.total_size, delay=1.0, ncols=78, unit='B', unit_scale=True, bar_format="{l_bar}         {bar}{r_bar}"
     ) as progress:
-      for block in encrypt_file((args.wideopen, passwords, recipients, signatures), a.encode):
+      for block in encrypt_file((args.wideopen, passwords, recipients, signatures), a.encode, a):
         progress.update(len(block))
         outf.write(block)
     # Pretty output printout
@@ -190,8 +197,9 @@ def main_enc(args):
       methods = "  ".join(
         [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (len(passwords) - len(vispw)) * ["🔑 <pw>"]
       )
+      methods += f' 🔷 {a.filehash[:12].hex()}'
       for id in signatures:
-        methods += f"  ✍️  {id}"
+        methods += f"  🖋️ {id}"
       if methods:
         lock += f"    {methods}"
       if args.outfile:
