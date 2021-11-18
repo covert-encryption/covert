@@ -25,7 +25,6 @@ def generate(n=4, sep=""):
     pw = sep.join(wl.pop(secrets.randbelow(len(wl))) for i in range(n))
     if 4 * zxcvbn(pw)["guesses"] > len(words)**n:
       return pw
-    print(pw)
 
 
 def costfactor(pwd: bytes):
