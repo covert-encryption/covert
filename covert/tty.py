@@ -56,7 +56,7 @@ def editor():
       win = get_terminal_size()
       startrow = min(max(0, row - 1), startrow)
       startrow = max(row - win.lines + 2, startrow)
-      draw = "\x1B[K\n".join(l[:win.columns - 1] for l in data.split("\n")[startrow : startrow + win.lines - 1])
+      draw = "\x1B[K\n".join(l[:win.columns - 1] for l in data.split("\n")[startrow:startrow + win.lines - 1])
       term.write(f"\x1B[2;1H{draw}\x1B[J\x1B[{row - startrow + 2};{col+1}H")
 
 

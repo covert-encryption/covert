@@ -119,6 +119,8 @@ def run_decryption(infile, args, passwords, identities):
       stderr.write(f" ✅ {key} {text}\n")
     else:
       stderr.write(f"\x1B[1;31m ❌ {key} {text}\x1B[0m\n")
+
+
 def main_enc(args):
   vispw = []
   padding = .01 * float(args.padding) if args.padding is not None else .05
