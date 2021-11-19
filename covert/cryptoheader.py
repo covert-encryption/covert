@@ -10,6 +10,9 @@ def encrypt_header(auth):
   wideopen, passwords, recipients, identities = auth
   assert wideopen or passwords or recipients, "Must have an authentication method defined"
   assert not wideopen or not (passwords or recipients), "Cannot have auth with wide-open"
+  # Ensure uniqueness
+  passwords = set(passwords)
+  recipients = set(recipients)
   simple = not recipients and len(passwords) <= 1
   # Create a random ephemeral keypair and use it as nonce (even when no pubkeys are used)
   eph = pubkey.Key()
@@ -17,11 +20,11 @@ def encrypt_header(auth):
   nonce = util.noncegen(n)
   # Only one password or wide-open
   if simple:
-    key = bytes(32) if wideopen else passphrase.argon2(passwords[0], n)
+    key = bytes(32) if wideopen else passphrase.argon2(passwords.pop(), n)
     return n, nonce, key
   # Pubkeys and/or multiple auth mode
-  auth = [passphrase.argon2(pw, n) for pw in set(passwords)]
-  auth += [pubkey.derive_symkey(n, eph, r) for r in set(recipients)]
+  auth = [passphrase.argon2(pw, n) for pw in passwords]
+  auth += [pubkey.derive_symkey(n, eph, r) for r in recipients]
   # It is crucial to remove any duplicates
   auth = list(set(auth))
   random.shuffle(auth)
