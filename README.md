@@ -19,9 +19,7 @@ A message (base64 or binary) has no headers or anything else that could be recog
 HDGKMFEo5cYHtUF1w9aNlX1lMmWJD3B7p8HoBoQZTNJGjg/nUOMqlXLspmmVO7PQj8Pe
 ```
 
-Covert generates easy passphrases like `pinkmuletibetdemand` for the above. The encoded message includes random padding to hide the length of the message and it is still shorter than others.
-
-For comparison, `gpg` needs six lines instead of one and still ends up revealing the exact length of the message. It also claims that this passphrase is insecure while happily accepting very common passwords like `passw0rd` and `password1` (that are correctly rejected by Covert). Please, do not require digits or symbols in passphrases, it only weakens your security!
+Covert generates easy passphrases like `pinkmuletibetdemand` for the above. The encoded message includes random padding to hide the length of the message and it is still shorter than others. For comparison, `gpg` needs six lines instead of one and still ends up revealing the exact length of the message.
 
 ## Try it!
 
