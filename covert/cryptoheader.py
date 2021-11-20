@@ -16,7 +16,7 @@ def encrypt_header(auth):
   simple = not recipients and len(passwords) <= 1
   # Create a random ephemeral keypair and use it as nonce (even when no pubkeys are used)
   eph = pubkey.Key()
-  n = eph.pk[:12]
+  n = eph.pkhash[:12]
   nonce = util.noncegen(n)
   # Only one password or wide-open
   if simple:
@@ -30,7 +30,7 @@ def encrypt_header(auth):
   random.shuffle(auth)
   # The first hash becomes the key and any additional ones are xorred with it
   key, *auth = auth
-  header = eph.pk + b"".join([util.xor(key, a) for a in auth])
+  header = eph.pkhash + b"".join([util.xor(key, a) for a in auth])
   return header, nonce, key
 
 
@@ -45,7 +45,7 @@ def decrypt_header(ciphertext, auth):
   with suppress(CryptoError):
     return *find_header_hend(ciphertext, n, key, 12), nonce
   # Try public keys
-  eph = pubkey.Key(pk=ciphertext[:32])
+  eph = pubkey.Key(pkhash=ciphertext[:32])
   for idkey in identities:
     key = pubkey.derive_symkey(n, idkey, eph)
     with suppress(CryptoError):

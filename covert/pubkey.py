@@ -7,7 +7,7 @@ from urllib.request import urlopen
 
 import nacl.bindings as sodium
 
-from covert import bech, passphrase, util
+from covert import bech, elligator, passphrase, util
 
 
 def derive_symkey(nonce, local, remote):
@@ -18,13 +18,25 @@ def derive_symkey(nonce, local, remote):
 
 class Key:
 
-  def __init__(self, *, keystr="", comment="", sk=None, pk=None, edsk=None, edpk=None):
+  def __init__(self, *, keystr="", comment="", sk=None, pk=None, edsk=None, edpk=None, pkhash=None):
     self.sk = self.pk = self.edsk = self.edpk = None
     self.keystr = keystr
     self.comment = comment
-    # Create if no parameters were given
-    if not (sk or pk or edsk or edpk):
-      edpk, edsk = sodium.crypto_sign_keypair()
+    self.pkhash = pkhash
+    anykey = sk or pk or edsk or edpk
+    # Restore pk from hashed format
+    if pkhash is not None:
+      if anykey:
+        raise ValueError("Invalid Key argument: pkhash cannot be combined with other keys")
+      pk = elligator.unhash(pkhash)
+    # Create elligator2-compatible keys if no parameters were given
+    elif not anykey:
+      while True:
+        edpk, edsk = sodium.crypto_sign_keypair()
+        pk = sodium.crypto_sign_ed25519_pk_to_curve25519(edpk)
+        if elligator.ishashable(pk):
+          break  # 50 % should succeed
+      self.pkhash = elligator.keyhash(pk)
     # Store each parameter and convert ed25519 keys to curve25519
     if edsk:
       self.edsk = bytes(edsk[:32])
@@ -178,6 +190,8 @@ def decode_pk(keystr):
       return Key(keystr=keystr, comment="wg", pk=keybytes)
   except ValueError:
     pass
+  if os.path.isfile(keystr):
+    raise ValueError(f"Unrecognized key string {keystr} (is this a keyfile?)")
   raise ValueError(f"Unrecognized key {keystr}")
 
 
