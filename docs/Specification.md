@@ -6,13 +6,13 @@ A file begins with a cryptographic header, followed by one or more encrypted aut
 
 `header` `block0` `block1`...`blockN` `signature`*
 
-The header contains tokens neded for decrypting block0, given suitable passwords or private keys. `ephpk` stores an ephemeral public key, always randomly created for each file, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (short mode) or by stealing bytes of `ephpk` (advanced mode). There may be up to 20 recipients, each a shared password or a public key. A short mode is provided for simple cases where 12 bytes header overhead is sufficient. Otherwise the header size is 32 bytes times the number of recipients, although decoy entries filled with random bytes may be added to obscure the number of recipients.
+The header contains tokens neded for decrypting block0, given suitable passwords or private keys. `ephash` stores an ephemeral public key hash, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (short mode) or by stealing bytes of `ephash` (advanced mode). There may be up to 20 recipients, each a shared password or a public key. A short mode is provided for simple cases where 12 bytes header overhead is sufficient. Otherwise the header size is 32 bytes times the number of recipients, although decoy entries filled with random bytes may be added to obscure the number of recipients.
 
 | Header format | Mode | Description |
 |:---|:---|:---|
 | `nonce:12` | Short | Single password `key = argon2(pw, nonce)` or wide-open `key = zeroes(32)`. |
-| `ephpk:32` | Advanced | Single pubkey `key = sha512(nonce + ecdh(eph, receiver))[:32]` |
-| `ephpk:32` `auth1:32` `auth2:32` ... | Advanced | Multiple authentication methods (pubkeys and/or passwords). |
+| `ephash:32` | Advanced | Single pubkey `key = sha512(nonce + ecdh(eph, receiver))[:32]` |
+| `ephash:32` `auth1:32` `auth2:32` ... | Advanced | Multiple authentication methods (pubkeys and/or passwords). |
 
 The short mode saves space for the commonly used single password and wide-open cases, versus using the advanced mode. The header is only 12 bytes and the auth key is directly used as the file key used to encrypt all the blocks.
 
@@ -105,6 +105,33 @@ There are no headers to make it distinct of any random data encoded in Base64, b
 Single character dict keys are reserved to the format. Users may add custom metadata to any dict by using multi-letter key names.
 
 The use of any unnecessary metadata, e.g. any names of programs used, is heavily discouraged.
+
+### Ephemeral key hashing
+
+A fresh ephemeral keypair is created for each Covert file. This is part of a standard ECDH exchange that makes up the public key system. The ephemeral public key is written to the file so that the recipient can, together with his secret key, decrypt the contents. The sender derives a shared key using the ephemeral secret key with the recipient public key and the immediately destroys the ephemeral key, so that he can no longer open the file.
+
+A plain public key if stored in the header could be verified by outsiders as a valid key (with 25 % likelyhood of being just random data). Instead, Elligator2 hashing is used such that all bits are indistinguishable from random data. As per Elligator2, one needs to create random ephemeral keys until one that fits the encoding is found (half of attempts fail). Three additional random bits are needed in encoding, one for v coordinate sign that gets scrambled and stored in the hash, and two others to fill the otherwise zero high bits of Elligator2 output.
+
+The receiver reverses this process, masking out the two high bit, then unhashing to recover the u coordinate (i.e. the ephemeral public key), while ignoring the v coordinate and its sign (Curve25519 never uses the v coordinate).
+
+Depending on the sign bit two very distinct hashes as created, each in four variations by the other two bits the final byte. Each of these eight possibilities should be produced equally likely, and each of them should be restored to identical bytes as the source key. Implementation of Elligator2 vary in their choice of the non-square value, making hashes incompatible. Covert uses value 2, while some implementations might be using sqrt(-1). Verify your code against the following test vectors:
+
+```
+# Ephemeral public key (Curve25519)
+2b6a365dc67959894a00a9e07d45215bb8679ce1a47929bb643195e3adfc1755
+
+# Possible ephash values (3 random bits give 8 possibilities)
+04c158c70b275e02c0020add985ca2d9f712ea4eb702dac283d6931e689b391c
+04c158c70b275e02c0020add985ca2d9f712ea4eb702dac283d6931e689b395c
+04c158c70b275e02c0020add985ca2d9f712ea4eb702dac283d6931e689b399c
+04c158c70b275e02c0020add985ca2d9f712ea4eb702dac283d6931e689b39dc
+c914aa274bb2ebfadf735eab268417e8f292712d9c05fa399aee7972b99f1a00
+c914aa274bb2ebfadf735eab268417e8f292712d9c05fa399aee7972b99f1a40
+c914aa274bb2ebfadf735eab268417e8f292712d9c05fa399aee7972b99f1a80
+c914aa274bb2ebfadf735eab268417e8f292712d9c05fa399aee7972b99f1ac0
+```
+
+The inverse hash should restore each of the variations to the exact same bytes as the original key.
 
 ### Endianess
 
