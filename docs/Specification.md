@@ -114,7 +114,7 @@ A plain public key if stored in the header could be verified by outsiders as a v
 
 The receiver reverses this process, masking out the two high bit, then unhashing to recover the u coordinate (i.e. the ephemeral public key), while ignoring the v coordinate and its sign (Curve25519 never uses the v coordinate).
 
-Depending on the sign bit two very distinct hashes as created, each in four variations by the other two bits the final byte. Each of these eight possibilities should be produced equally likely, and each of them should be restored to identical bytes as the source key. Implementation of Elligator2 vary in their choice of the non-square value, making hashes incompatible. Covert uses value 2, while some implementations might be using sqrt(-1). Verify your code against the following test vectors:
+Depending on the sign bit two very distinct hashes as created, each in four variations by the other two bits in the final byte. Each of these eight possibilities should be produced equally likely, and each of them should be restored to identical bytes as the source key. Implementation of Elligator2 vary in their choice of the non-square value, making hashes incompatible. Covert uses value 2, while some implementations might be using sqrt(-1). Verify your code against the following test vectors:
 
 ```
 # Ephemeral public key (Curve25519)
