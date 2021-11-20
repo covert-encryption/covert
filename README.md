@@ -57,6 +57,12 @@ Covert messages are much shorter than with other cryptosystems, accomplished by 
 
 A key insight is that a receiver can *blindly* attempt to decrypt a file with many different keys and parameters until he finds a combination that authenticates successfully. This saves valuable space on short messages and improves security because no plain text headers are needed.
 
+![Screenshot](https://github.com/covert-encryption/covert/raw/main/docs/covert-gui.webp)
+
+## A secure desktop app
+
+Covert comes with a graphical user interface built in. Unlike PGP GUIs, Covert does not use external CLI tools but instead does everything inside the app. Storing the plain text message on disk at any point exposes it to forensic researchers and hackers who might be scanning your drive for deleted files, and unfortunately there have been such leaks with popular PGP programs that use temporary files to communicate with external editors or with the `gpg` tool.
+
 ## Additional reading
 
 * [Covert Format Specification](https://github.com/covert-encryption/covert/blob/main/docs/Specification.md)
