@@ -4,18 +4,15 @@ from io import BytesIO
 
 from PySide6.QtCore import QRect, QSize, Qt, Slot
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel
-from PySide6.QtWidgets import (
-  QApplication, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListView, QMenu, QMenuBar, QPlainTextEdit,
-  QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
-)
+from PySide6.QtWidgets import QApplication, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListView, QMenu, QMenuBar, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
 
 from covert import pubkey, util
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
-from covert.cli import ARMOR_MAX_SIZE
-from covert.gui.pw import PasswordInput
+from covert.cli import ARMOR_MAX_SIZE, TTY_MAX_SIZE
+from covert.gui.encrypt import AuthInput
 from covert.gui.util import datafile, setup_interrupt_handling
-from covert.gui.widgets import MethodsWidget
+from covert.gui.widgets import EncryptToolbar, MethodsWidget
 
 
 class App(QApplication):
@@ -24,10 +21,14 @@ class App(QApplication):
     QApplication.__init__(self, sys.argv)
     self.recipients = set()
     self.signatures = set()
+    self.identities = set()
     self.passwords = set()
     self.files = set()
 
     self.logo = QPixmap(datafile('logo.png'))
+    self.newicon = QPixmap(datafile('icons8-new-document-48.png')).scaled(48, 48)
+    self.pasteicon = QPixmap(datafile('icons8-paste-48.png')).scaled(48, 48)
+    self.openicon = QPixmap(datafile('icons8-cipherfile-64.png')).scaled(48, 48)
     self.fileicon = QPixmap(datafile('icons8-file-64.png')).scaled(24, 24)
     self.foldericon = QPixmap(datafile('icons8-folder-48.png')).scaled(24, 24)
     self.unlockicon = QPixmap(datafile('icons8-unlocked-48.png')).scaled(24, 24)
@@ -65,23 +66,9 @@ class App(QApplication):
     if len(self.recipients) + len(self.passwords) > 20:
       self.recipients = set(list(self.recipients)[:20])
       self.passwords = set(list(self.passwords)[:20 - len(self.recipients)])
-      # FIXME: Raise an error message
-    if self.signatures:
-      self.window.siginput.setText(', '.join(str(k) for k in self.signatures))
-    else:
-      self.window.siginput.setText("Anonymous (no signature)")
-
-    self.window.methods.deleteLater()
-    self.window.methods = MethodsWidget(self)
-    self.window.bottomlayout.insertWidget(0, self.window.methods)
-
-    self.window.attachments.setVisible(bool(self.files))
-    self.window.attmodel.clear()
-    for a in list(sorted(self.files)):
-      icon = self.foldericon if os.path.isdir(a) else self.fileicon
-      item = QStandardItem(icon, a.split('/')[-1])
-      self.window.attmodel.appendRow(item)
-
+      self.window.update_encryption_views()
+      raise ValueError("Some recipients were discarded, can only have 20 recipients.")
+    self.window.update_encryption_views()
 
 class MainWindow(QWidget):
 
@@ -94,7 +81,8 @@ class MainWindow(QWidget):
     self.logo.setAlignment(Qt.AlignTop)
     self.logo.setGeometry(QRect(0, 0, 128, 128))
     self.logo.setPixmap(app.logo)
-    self.pw = PasswordInput(app)
+    self.auth = AuthInput(app)
+    self.methods = MethodsWidget(app)
     self.plaintext = QPlainTextEdit()
     self.plaintext.setTabChangesFocus(True)
     self.attachments = QListView()
@@ -102,152 +90,121 @@ class MainWindow(QWidget):
     self.attachments.setModel(self.attmodel)
     self.attachments.setMaximumHeight(120)
     self.attachments.setWrapping(True)
+    self.newbutton = QPushButton(self.app.newicon, "&New Message")
+    self.pastebutton = QPushButton(self.app.pasteicon, "&Paste Armored")
+    self.openbutton = QPushButton(self.app.openicon, "&Open File")
+    self.newbutton.setIconSize(QSize(48, 48))
+    self.pastebutton.setIconSize(QSize(48, 48))
+    self.openbutton.setIconSize(QSize(48, 48))
+    self.newbutton.clicked.connect(self.encrypt_new)
+    self.pastebutton.clicked.connect(self.decrypt_paste)
+    self.openbutton.clicked.connect(self.decrypt_file)
+
     self.layout = QGridLayout(self)
-    self.layout.addWidget(self.logo, 0, 0, 1, 1)
     self.layout.setContentsMargins(0, 0, 0, 0)
+    self.layout.setSpacing(0)
+    self.layout.addWidget(self.logo, 0, 0, 4, 1)
+    self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed), 0, 1)
+    self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed), 0, 6)
+    self.layout.addWidget(self.newbutton, 0, 2)
+    self.layout.addItem(QSpacerItem(11, 0, QSizePolicy.Expanding, QSizePolicy.Fixed), 0, 3)
+    self.layout.addWidget(self.pastebutton, 0, 4)
+    self.layout.addWidget(self.openbutton, 0, 5)
+    self.layout.addItem(QSpacerItem(0, 11), 1, 2, 1, 4)
+    self.layout.addWidget(self.auth, 2, 2, 1, 4)
+    self.layout.addItem(QSpacerItem(0, 11), 3, 2, 1, 4)
+    self.layout.addWidget(self.methods, 4, 0, 1, -1)
+    self.layout.addWidget(self.plaintext, 5, 0, 1, -1)
+    self.layout.addWidget(self.attachments, 6, 0, 1, -1)
+    self.layout.addWidget(EncryptToolbar(app), 7, 0, 1, -1)
 
-    self.siginput = QLineEdit()
-    self.siginput.setDisabled(True)
-    self.siginput.setReadOnly(True)
-    self.siginput.setFixedWidth(260)
-    self.pkinput = QLineEdit()
-    self.pkinput.setFixedWidth(260)
-    self.pkinput.setPlaceholderText("SSH/Minisign/Age pubkey, or github:user")
 
-    self.pkadd = QPushButton('Add')
-    self.pkfile = QPushButton('Open keyfile')
-    self.skfile = QPushButton('Open keyfile')
+  def update_encryption_views(self):
+    self.auth.siginput.setText(', '.join(str(k) for k in self.app.signatures) or "Anonymous (no signature)")
 
-    keylayout = QGridLayout()
-    keylayout.setContentsMargins(10, 10, 10, 10)
-    keylayout.addWidget(QLabel("Sender:"), 0, 0)
-    keylayout.addWidget(self.siginput, 0, 1)
-    keylayout.addWidget(self.skfile, 0, 4)
-    keylayout.addWidget(QLabel('Recipient public keys or a password may be used for encryption.'), 1, 0, 1, 6)
-    keylayout.addWidget(QLabel("Recipient:"), 2, 0)
-    keylayout.addWidget(self.pkinput, 2, 1)
-    keylayout.addWidget(self.pkadd, 2, 2)
-    keylayout.addItem(QSpacerItem(10, 1), 2, 3)
-    keylayout.addWidget(self.pkfile, 2, 4)
-    keylayout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed), 0, 5)
-    toplayout = QVBoxLayout()
-    toplayout.setContentsMargins(0, 0, 0, 0)
-    toplayout.addLayout(keylayout)
-    toplayout.addWidget(self.pw)
-    toplayout.addItem(QSpacerItem(0, 30))
+    self.methods.deleteLater()
+    self.methods = MethodsWidget(self.app)
+    self.layout.addWidget(self.methods, 4, 0, 1, -1)
 
-    QShortcut(QKeySequence("Return"), self.pkinput, context=Qt.WidgetShortcut).activated.connect(self.decodepk)
-    self.pkadd.clicked.connect(self.decodepk)
-    self.pkfile.clicked.connect(self.loadpk)
-    self.skfile.clicked.connect(self.loadsk)
-
-    self.methods = MethodsWidget(app)
-
-    self.bottomlayout = bottomlayout = QVBoxLayout()
-    bottomlayout.setContentsMargins(0, 0, 0, 0)
-    bottomlayout.setSpacing(0)
-    bottomlayout.addWidget(self.methods)
-    bottomlayout.addWidget(self.plaintext)
-    bottomlayout.addWidget(self.attachments)
-    bottomlayout.addWidget(EncryptToolbar(app))
-    self.layout.addLayout(toplayout, 0, 1)
-    self.layout.addLayout(bottomlayout, 1, 0, 1, 2)
+    self.attachments.setVisible(bool(self.app.files))
+    self.attmodel.clear()
+    for a in list(sorted(self.app.files)):
+      icon = self.app.foldericon if os.path.isdir(a) else self.app.fileicon
+      item = QStandardItem(icon, a.split('/')[-1])
+      self.attmodel.appendRow(item)
 
   @Slot()
-  def decodepk(self):
-    # In CLI github is considered a file, and here not (because not from file dialog)
-    # Need to handle this logic mismatch here
-    keystr = self.pkinput.text()
-    if keystr.startswith('github:'):
-      self.app.recipients |= set(pubkey.read_pk_file(keystr))
-    else:
-      self.app.recipients.add(pubkey.decode_pk(keystr))
-      self.app.update_encryption_views()
-    self.pkinput.setText("")
+  def encrypt_new(self):
+    self.auth.setVisible(True)
+    self.plaintext.setPlainText("")
+    self.app.attachments = {}
+    self.app.update_encryption_views()
+    self.plaintext.setFocus()
 
   @Slot()
-  def loadpk(self):
-    file = QFileDialog.getOpenFileName(
-      self, "Covert - Open public key", "", "SSH, Minisign and Age public keys (*.pub);;All files (*)"
-    )[0]
+  def decrypt_paste(self):
+    data = util.armor_decode(QGuiApplication.clipboard().text().encode())
+    with BytesIO(data) as f:
+      del data
+      self.decrypt(f)
+
+  @Slot()
+  def decrypt_file(self):
+    file = QFileDialog.getOpenFileName(self, "Covert - Open file", "", "Covert Binary or Armored (*)")[0]
     if not file:
       return
-    self.app.recipients |= set(pubkey.read_pk_file(file))
-    self.app.update_encryption_views()
-
-  @Slot()
-  def loadsk(self):
-    file = QFileDialog.getOpenFileName(self, "Covert - Open secret key", "",
-      "SSH, Minisign and Age private keys (*)")[0]
-    if not file:
+    if 40 <= os.path.getsize(file) <= ARMOR_MAX_SIZE:
+      # Try reading the file as armored text rather than binary
+      with open(file, "rb") as f:
+        data = f.read()
+      try:
+        f = BytesIO(util.armor_decode(data))
+      except ValueError:
+        f = BytesIO(data)
+      del data
+      with f:
+        self.decrypt(f)
       return
-    self.app.signatures = set(pubkey.read_sk_file(file))
-    self.app.update_encryption_views()
+    # Process as binary
+    with open(file, "rb") as f:
+      with suppress(OSError):
+        f = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+      with f:
+        self.decrypt(f)
 
-
-class EncryptToolbar(QWidget):
-
-  def __init__(self, app):
-    QWidget.__init__(self)
-    self.app = app
-    self.layout = QHBoxLayout(self)
-    self.layout.setContentsMargins(10, 10, 10, 10)
-
-    attachicon = QPixmap(datafile('icons8-attach-48.png'))
-    copyicon = QPixmap(datafile('icons8-copy-48.png'))
-    saveicon = QPixmap(datafile('icons8-save-48.png'))
-    attach = QPushButton(attachicon, " Attach &Files")
-    attachdir = QPushButton(attachicon, " Fol&der")
-    copy = QPushButton(copyicon, " &Armored")
-    save = QPushButton(saveicon, " &Save")
-    attach.setIconSize(QSize(24, 24))
-    attachdir.setIconSize(QSize(24, 24))
-    copy.setIconSize(QSize(24, 24))
-    save.setIconSize(QSize(24, 24))
-    self.layout.addWidget(attach)
-    self.layout.addWidget(attachdir)
-    self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding))
-    self.layout.addWidget(copy)
-    self.layout.addWidget(save)
-
-    attach.clicked.connect(self.attach)
-    attachdir.clicked.connect(self.attachdir)
-    copy.clicked.connect(self.copyarmor)
-    save.clicked.connect(self.savecipher)
-
-  @Slot()
-  def attach(self):
-    self.app.files |= set(QFileDialog.getOpenFileNames(self, "Covert - Attach files")[0])
-    self.app.update_encryption_views()
-
-  @Slot()
-  def attachdir(self):
-    self.app.files.add(QFileDialog.getExistingDirectory(self, "Covert - Attach a folder"))
-    self.app.update_encryption_views()
-
-  @Slot()
-  def copyarmor(self):
-    outfile = BytesIO()
-    self.app.encrypt(outfile)
-    outfile.seek(0)
-    data = util.armor_encode(outfile.read())
-    QGuiApplication.clipboard().setText(f"```\n{data.decode()}\n```\n")
-
-  @Slot()
-  def savecipher(self):
-    name = QFileDialog.getSaveFileName(
-      self, 'Covert - Save ciphertext', "", 'ASCII Armored - good stealth (*.txt);;Covert Binary - maximum stealth (*)',
-      'Covert Binary - maximum stealth (*)'
-    )[0]
-    if not name:
-      return
-    if name.lower().endswith('.txt'):
-      outfile = BytesIO()
-      self.app.encrypt(outfile)
-      outfile.seek(0)
-      data = util.armor_encode(outfile.read())
-      with open(name, 'wb') as f:
-        f.write(data + b"\n")
-      return
-    with open(name, 'wb') as f:
-      self.app.encrypt(f)
+  def decrypt(self, infile):
+    self.auth.setVisible(False)
+    self.plaintext.clear()
+    a = Archive()
+    f = None
+    for data in a.decode(decrypt_file((self.app.passwords, self.app.identities), infile, a)):
+      if isinstance(data, dict):
+        # Index
+        pass
+      elif isinstance(data, bool):
+        # Nextfile
+        prev = a.prevfile
+        if f:
+          if isinstance(f, BytesIO):
+            f.seek(0)
+            data = f.read()
+            try:
+              self.plaintext.appendPlainText(f" 💬\n{data.decode()}")
+            except UnicodeDecodeError:
+              pidx = a.flist.index(prev)
+              prev['n'] = f"noname.{pidx + 1:03}"
+              prev['renamed'] = True
+          f.close()
+          f = None
+        if prev and 'n' in prev:
+          n = prev['n']
+          s = prev['s']
+          r = '<renamed>' if 'renamed' in prev else ''
+          self.plaintext.appendPlainText(f'{s:15,d} 📄 {n:60}{r}'.rstrip())
+        if a.curfile:
+          n = a.curfile.get('n', '')
+          if not n and a.curfile.get('s', float('inf')) < TTY_MAX_SIZE:
+            f = BytesIO()
+      else:
+        if f:
+          f.write(data)

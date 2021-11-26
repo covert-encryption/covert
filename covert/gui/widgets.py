@@ -1,6 +1,11 @@
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QStandardItem, QStandardItemModel
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem, QWidget
+from io import BytesIO
+
+from PySide6.QtCore import QSize, Qt, Slot
+from PySide6.QtGui import QGuiApplication, QPixmap, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem, QWidget
+
+from covert import util
+from covert.gui.util import datafile
 
 
 class MethodsWidget(QWidget):
@@ -9,7 +14,7 @@ class MethodsWidget(QWidget):
     QWidget.__init__(self)
     self.app = app
     self.layout = QHBoxLayout(self)
-    self.layout.setContentsMargins(10, 10, 10, 10)
+    self.layout.setContentsMargins(11, 11, 11, 11)
     if not (app.passwords or app.recipients):
       lock = QLabel()
       lock.setPixmap(app.unlockicon)
@@ -44,3 +49,71 @@ class MethodsWidget(QWidget):
     self.app.passwords = set()
     self.app.signatures = set()
     self.app.update_encryption_views()
+
+
+class EncryptToolbar(QWidget):
+
+  def __init__(self, app):
+    QWidget.__init__(self)
+    self.app = app
+    self.layout = QHBoxLayout(self)
+    self.layout.setContentsMargins(11, 11, 11, 11)
+
+    attachicon = QPixmap(datafile('icons8-attach-48.png'))
+    copyicon = QPixmap(datafile('icons8-copy-48.png'))
+    saveicon = QPixmap(datafile('icons8-save-48.png'))
+    attach = QPushButton(attachicon, " Attach &Files")
+    attachdir = QPushButton(attachicon, " Fol&der")
+    copy = QPushButton(copyicon, " &Armored")
+    save = QPushButton(saveicon, " &Save")
+    attach.setIconSize(QSize(24, 24))
+    attachdir.setIconSize(QSize(24, 24))
+    copy.setIconSize(QSize(24, 24))
+    save.setIconSize(QSize(24, 24))
+    self.layout.addWidget(attach)
+    self.layout.addWidget(attachdir)
+    self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding))
+    self.layout.addWidget(copy)
+    self.layout.addWidget(save)
+
+    attach.clicked.connect(self.attach)
+    attachdir.clicked.connect(self.attachdir)
+    copy.clicked.connect(self.copyarmor)
+    save.clicked.connect(self.savecipher)
+
+  @Slot()
+  def attach(self):
+    self.app.files |= set(QFileDialog.getOpenFileNames(self, "Covert - Attach files")[0])
+    self.app.update_encryption_views()
+
+  @Slot()
+  def attachdir(self):
+    self.app.files.add(QFileDialog.getExistingDirectory(self, "Covert - Attach a folder"))
+    self.app.update_encryption_views()
+
+  @Slot()
+  def copyarmor(self):
+    outfile = BytesIO()
+    self.app.encrypt(outfile)
+    outfile.seek(0)
+    data = util.armor_encode(outfile.read())
+    QGuiApplication.clipboard().setText(f"```\n{data.decode()}\n```\n")
+
+  @Slot()
+  def savecipher(self):
+    name = QFileDialog.getSaveFileName(
+      self, 'Covert - Save ciphertext', "", 'ASCII Armored - good stealth (*.txt);;Covert Binary - maximum stealth (*)',
+      'Covert Binary - maximum stealth (*)'
+    )[0]
+    if not name:
+      return
+    if name.lower().endswith('.txt'):
+      outfile = BytesIO()
+      self.app.encrypt(outfile)
+      outfile.seek(0)
+      data = util.armor_encode(outfile.read())
+      with open(name, 'wb') as f:
+        f.write(data + b"\n")
+      return
+    with open(name, 'wb') as f:
+      self.app.encrypt(f)
