@@ -1,3 +1,4 @@
+import platform
 import random
 import unicodedata
 from base64 import b64decode, b64encode
@@ -5,24 +6,25 @@ from math import log2
 from secrets import choice, token_bytes
 
 ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
-B64_ALPHABET = b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+IS_APPLE = platform.system() == "Darwin"
 
 
-def armor_decode(data):
+def armor_decode(data: str) -> bytes:
   """Base64 decode."""
-  # Fix CRLF, remove any surrounding whitespace and code block markers, support also urlsafe
-  data = data.replace(b'\r\n', b'\n').strip(b'\t `\n').replace(b'-', b'+').replace(b'_', b'/')
-  if not data.isascii():
+  # Fix CRLF, remove any surrounding whitespace and code block markers
+  data = data.replace('\r\n', '\n').strip('\t `\n')
+  if not data.isascii() or not data.isprintable():
     raise ValueError(f"Invalid armored encoding: data is not ASCII/Base64")
-  # Strip indent, trailing whitespace and empty lines
-  lines = [line for l in data.split(b'\n') if (line := l.strip())]
+  # Strip indent and quote marks, trailing whitespace and empty lines
+  lines = [line for l in data.split('\n') if (line := l.lstrip('\t >').rstrip())]
   # Empty input means empty output (will cause an error elsewhere)
   if not lines:
     return b''
   # Verify all lines
   for i, line in enumerate(lines):
     if any(ch not in B64_ALPHABET for ch in line):
-      raise ValueError(f"Invalid armored encoding: unrecognized data on line {i + 1}: {line!r}")
+      raise ValueError(f"Invalid armored encoding: unrecognized data on line {i + 1}")
   # Verify line lengths
   l = len(lines[0])
   for i, line in enumerate(lines[:-1]):
@@ -30,23 +32,29 @@ def armor_decode(data):
     if l2 < 76 or l2 % 4 or l2 != l:
       raise ValueError(f"Invalid armored encoding: length {l2} of line {i + 1} is invalid")
   # Not sure why we even bother to use the standard library after having handled all that...
-  data = b"".join(lines)
+  data = "".join(lines)
   padding = -len(data) % 4
-  return b64decode(data + padding*b'=', validate=True)
+  return b64decode(data + padding*'=', validate=True)
 
 
-def armor_encode(data):
+def armor_encode(data: bytes) -> str:
   """Base64 without the padding nonsense, and with adaptive line wrapping."""
-  data = b64encode(data).rstrip(b'=')
+  data = b64encode(data).decode().rstrip('=')
   if len(data) > ARMOR_MAX_SINGLELINE:
     # Make fingerprinting the encoding by line lengths a bit harder while still using >76
     splitlen = choice(range(76, 121, 4))
-    data = b'\n'.join([data[i:i + splitlen] for i in range(0, len(data), splitlen)])
+    data = '\n'.join([data[i:i + splitlen] for i in range(0, len(data), splitlen)])
   return data
 
 
-def encode(s):
+def encode(s: str) -> bytes:
+  """Unicode-normalizing UTF-8 encode."""
   return unicodedata.normalize("NFKC", s).encode()
+
+
+def decode_native(s: bytes) -> str:
+  """Restore platform-native Unicode normalization form (e.g. for filenames)."""
+  return unicodedata.normalize("NFD" if IS_APPLE else "NFKC", s.decode())
 
 
 def noncegen(nonce=None):

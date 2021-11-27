@@ -231,7 +231,7 @@ def main_enc(args):
       data = util.armor_encode(data)
     if outf is not realoutf:
       if args.paste:
-        pyperclip.copy(f"```\n{data.decode()}\n```\n")
+        pyperclip.copy(f"```\n{data}\n```\n")
         return
       with realoutf:
         pretty = realoutf.isatty()
@@ -239,7 +239,7 @@ def main_enc(args):
           stderr.write("\x1B[1;30m```\x1B[0;34m\n")
           stderr.flush()
         try:
-          realoutf.write(data + b"\n")
+          realoutf.write(f"{data}\n".encode())
           realoutf.flush()
         finally:
           if pretty:
@@ -259,7 +259,7 @@ def main_dec(args):
   # If ASCII armored or TTY, read all input immediately (assumed to be short enough)
   total_size = os.path.getsize(args.files[0]) if args.files else 0
   if infile.isatty():
-    data = util.armor_decode((pyperclip.paste() if args.paste else tty.read_hidden("Encrypted message")).encode())
+    data = util.armor_decode(pyperclip.paste() if args.paste else tty.read_hidden("Encrypted message"))
     if not data:
       raise KeyboardInterrupt
     infile = BytesIO(data)
@@ -270,7 +270,7 @@ def main_dec(args):
     with infile:
       data = infile.read()
     try:
-      infile = BytesIO(util.armor_decode(data))
+      infile = BytesIO(util.armor_decode(data.decode()))
     except Exception:
       infile = BytesIO(data)
   else:
