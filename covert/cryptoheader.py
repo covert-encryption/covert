@@ -7,26 +7,26 @@ from covert import chacha, passphrase, pubkey, util
 
 
 def encrypt_header(auth):
-  wideopen, passwords, recipients, identities = auth
-  assert wideopen or passwords or recipients, "Must have an authentication method defined"
-  assert not wideopen or not (passwords or recipients), "Cannot have auth with wide-open"
+  wideopen, pwhashes, recipients, identities = auth
+  assert wideopen or pwhashes or recipients, "Must have an authentication method defined"
+  assert not wideopen or not (pwhashes or recipients), "Cannot have auth with wide-open"
   # Ensure uniqueness
-  passwords = set(passwords)
+  pwhashes = set(pwhashes)
   recipients = set(recipients)
-  simple = not recipients and len(passwords) <= 1
+  simple = not recipients and len(pwhashes) <= 1
   # Create a random ephemeral keypair and use it as nonce (even when no pubkeys are used)
   eph = pubkey.Key()
   n = eph.pkhash[:12]
   nonce = util.noncegen(n)
   # Only one password or wide-open
   if simple:
-    key = bytes(32) if wideopen else passphrase.argon2(passwords.pop(), n)
+    key = bytes(32) if wideopen else passphrase.authkey(pwhashes.pop(), n)
     return n, nonce, key
   # Pubkeys and/or multiple auth mode
-  auth = [passphrase.argon2(pw, n) for pw in passwords]
-  auth += [pubkey.derive_symkey(n, eph, r) for r in recipients]
-  # It is crucial to remove any duplicates
-  auth = list(set(auth))
+  auth = {passphrase.authkey(pw, n) for pw in pwhashes} | {pubkey.derive_symkey(n, eph, r) for r in recipients}
+  if len(auth) > 20:
+    raise ValueError("Too many recipients specified (max 20).")
+  auth = list(auth)
   random.shuffle(auth)
   # The first hash becomes the key and any additional ones are xorred with it
   key, *auth = auth
@@ -50,12 +50,9 @@ def decrypt_header(ciphertext, auth):
     key = pubkey.derive_symkey(n, idkey, eph)
     with suppress(CryptoError):
       return *find_header_slots(ciphertext, n, key), nonce
-  # Ask for passphrase if no auth was supplied
-  if not passwords and not identities:
-    passwords = [passphrase.ask('Passphrase')[0]]
   # Try passwords
   for a in passwords:
-    key = passphrase.argon2(a, n)
+    key = passphrase.authkey(a, n)
     # Single password
     with suppress(CryptoError):
       return *find_header_hend(ciphertext, n, key, 12), nonce

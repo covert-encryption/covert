@@ -29,27 +29,28 @@ def generate(n=4, sep=""):
 
 def costfactor(pwd: bytes):
   """Returns a factor of time cost increase for short passwords."""
-  return 1 << max(0, 22 - 2 * len(pwd))
+  return 1 << max(0, 12 - len(pwd))
 
 
-def argon2(password: str, nonce: bytes):
-  """Encode, prehash and argon2 hash a password."""
-  password = util.encode(password)
+def argon2(password: bytes) -> bytes:
+  """Argon2 hash a password."""
   if len(password) < MINLEN:
     raise ValueError("Too short password")
-  prehash = sha512(b"covert:" + password).digest()
-  return _argon2(prehash, nonce, 8 * costfactor(password))
-
-
-def _argon2(prehash: bytes, nonce: bytes, cost: int):
   return sodium.crypto_pwhash_alg(
-    outlen=32,
-    passwd=prehash,
-    salt=nonce + bytes(4),
-    opslimit=cost,
+    outlen=16,
+    passwd=password,
+    salt=b"covertpassphrase",
+    opslimit=8 * costfactor(password),
     memlimit=200 << 20,
     alg=sodium.crypto_pwhash_ALG_ARGON2ID13,
   )
+
+
+def authkey(pwhash: bytes, nonce: bytes) -> bytes:
+  """Calculate a file-specific auth key using a password with file nonce."""
+  if len(pwhash) != 16 or len(nonce) != 12:
+    raise Exception(f"Invalid arguments {pwhash=} {nonce=}")
+  return sha512(pwhash + nonce).digest()[:32]
 
 
 def autocomplete(pwd, pos):
@@ -126,10 +127,10 @@ def ask(prompt, create=False):
         elif ch == 'HOME': pos = 0
         elif ch == 'END': pos = len(pwd)
         elif ch == "ENTER":
-          if valid: return pwd, visible
+          if valid: return util.encode(pwd), visible
           if create:
             pwd = generate()
-            return pwd, True
+            return util.encode(pwd), True
         elif ch == "ESC":
           visible = not visible
         elif ch == "TAB":
@@ -146,25 +147,26 @@ def ask(prompt, create=False):
           pwd = pwd[:pos] + pwd[pos + 1:]
 
 
-def pwhints(pwd):
+def pwhints(pwd: str):
   maxlen = 20  # zxcvbn gets slow with long passwords
   z = zxcvbn(pwd[:maxlen], user_inputs=argv)
   fb = z["feedback"]
   warn = fb["warning"]
   sugg = fb["suggestions"]
-  guesses = float(z["guesses"])
+  guesses = int(z["guesses"])
   if len(pwd) > maxlen:
-    # Account for characters we didn't let zxcvbn process
-    guesses *= len(set(pwd))**(len(pwd) - maxlen)
+    # Add one bit of entropy for each additional character (NIST entropy estimation)
+    guesses <<= len(pwd) - maxlen
     del sugg[:]
-  # Estimate the time for our strong hashing (400 ms, 100 cores, 20 GB)
-  t = .4 / 100 * guesses
+  # Estimate the time for our strong hashing (600 ms, 100 cores, 27 GB)
+  t = .6 / 100 * guesses
   # Even stronger hashing of short passwords
-  factor = 1 << max(0, 22 - 2 * len(pwd))
+  pwbytes = util.encode(pwd)
+  factor = costfactor(pwbytes)
   t *= factor
   out = f"Estimated time to hack: {display_time(t)}\n"
   valid = True
-  enclen = len(pwd.encode())
+  enclen = len(pwbytes)
   if enclen < 8 or t < 600:
     out = "Choose a passphrase you don't use elsewhere.\n"
     valid = False
