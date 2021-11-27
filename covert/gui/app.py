@@ -143,7 +143,7 @@ class MainWindow(QWidget):
 
   @Slot()
   def decrypt_paste(self):
-    data = util.armor_decode(QGuiApplication.clipboard().text().encode())
+    data = util.armor_decode(QGuiApplication.clipboard().text())
     with BytesIO(data) as f:
       del data
       self.decrypt(f)
@@ -158,7 +158,7 @@ class MainWindow(QWidget):
       with open(file, "rb") as f:
         data = f.read()
       try:
-        f = BytesIO(util.armor_decode(data))
+        f = BytesIO(util.armor_decode(data.decode()))
       except ValueError:
         f = BytesIO(data)
       del data

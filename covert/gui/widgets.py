@@ -97,7 +97,7 @@ class EncryptToolbar(QWidget):
     self.app.encrypt(outfile)
     outfile.seek(0)
     data = util.armor_encode(outfile.read())
-    QGuiApplication.clipboard().setText(f"```\n{data.decode()}\n```\n")
+    QGuiApplication.clipboard().setText(f"```\n{data}\n```\n")
 
   @Slot()
   def savecipher(self):
@@ -113,7 +113,7 @@ class EncryptToolbar(QWidget):
       outfile.seek(0)
       data = util.armor_encode(outfile.read())
       with open(name, 'wb') as f:
-        f.write(data + b"\n")
+        f.write(f"{data}\n".encode())
       return
     with open(name, 'wb') as f:
       self.app.encrypt(f)

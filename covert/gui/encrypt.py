@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut, QValidator
 from PySide6.QtWidgets import QFileDialog, QGridLayout, QLabel, QLineEdit, QPushButton, QSpacerItem, QWidget
 
-from covert import passphrase, pubkey
+from covert import passphrase, pubkey, util
 from covert.gui.util import datafile
 
 
@@ -103,7 +103,7 @@ class AuthInput(QWidget):
         self.notes.setText(2*'\n' + "A stronger password is required.")
         return
       note = "Passphrase added."
-    self.app.passwords.add(pw)
+    self.app.passwords.add(passphrase.argon2(util.encode(pw)))
     self.app.window.plaintext.setFocus()
     self.pw.setText("")
     self.validator.validate(pw, 0)
