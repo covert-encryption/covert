@@ -1,3 +1,5 @@
+import sys
+
 def main():
   from covert.gui.app import App
   return App().exec()

@@ -24,8 +24,13 @@ setup(
   "msgpack>=1.0",
   "pyperclip>=1.8",
   "zxcvbn-covert>=5.0",
-  "pyside6>=6.2.1",
   ],
+  extras_require={
+    "gui": ["pyside6>=6.2.1"],
+  },
   include_package_data=True,
-  entry_points=dict(console_scripts=["covert = covert.__main__:main"]),
+  entry_points=dict(
+    console_scripts=["covert = covert.__main__:main"],
+    gui_scripts=["qcovert = covert.gui.__main__:main [gui]"],
+  ),
 )

@@ -151,13 +151,6 @@ def argparse():
 
 
 def main():
-  # Try starting the GUI if no CLI arguments are given (potentially skipping a filename argument)
-  if len(sys.argv) == 1 or len(sys.argv) == 2 and sys.argv[1] not in ['enc', 'dec', 'benchmark'] and os.path.exists(sys.argv[1]):
-    try:
-      import covert.gui
-      return covert.gui.main()
-    except ImportError:
-      pass  # Will print CLI help in argparse
   # CLI argument processing
   args = argparse()
   if len(args.outfile) > 1:
