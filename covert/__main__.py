@@ -1,3 +1,4 @@
+import os
 import sys
 from sys import stderr, stdout
 
@@ -151,7 +152,7 @@ def argparse():
 
 def main():
   # Try starting the GUI if no CLI arguments are given (potentially skipping a filename argument)
-  if len(sys.argv) == 1 or len(sys.argv) == 2 and sys.argv[1] not in ['enc', 'dec', 'benchmark']:
+  if len(sys.argv) == 1 or len(sys.argv) == 2 and sys.argv[1] not in ['enc', 'dec', 'benchmark'] and os.path.exists(sys.argv[1]):
     try:
       import covert.gui
       return covert.gui.main()
