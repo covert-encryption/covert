@@ -72,6 +72,7 @@ encargs = dict(
 )
 
 decargs = dict(
+  askpass='-p --passphrase'.split(),
   passwords='--password'.split(),
   identities='-i --identity'.split(),
   outfile='-o --out --output'.split(),

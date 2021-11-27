@@ -75,6 +75,8 @@ This gives good variation in the ciphertext length, such that one cannot guess t
 ![Padding size](https://github.com/covert-encryption/covert/raw/main/docs/in-out.png)
 Message data is shown in grey, and the padding added on top of it in orange. Covert padding is randomized, visualised by fading shades of orange. Another currently popular padding scheme Padme is shown for comparison. Covert implements fixed size padding for small files making anything smaller than that look exactly the same. If there is more content, there will on average be less padding, and not even the distribution of the randomness varies on such small files. Covert always adds a random component such that each size of output corresponds to a large scale of input sizes and datasets cannot easily be identified by the sizes that appear in output. Padme reveals small file sizes exactly and for each output size there is only a strict range of possible input sizes.
 
+The deterministic approach may seem better if an adversary can somehow request the file to be encrypted many times to collect data on variation of size knowing that the target is always the same. For most practical uses, randomness is a better choice.
+
 ![Output size distribution](https://github.com/covert-encryption/covert/raw/main/docs/distribution.png)
 If only specific known sizes are produced, it may be possible to identify which scheme was used. The output file sizes should be distributed such that any byte size is likely to occur. Padme produces only a set of very distinct sizes, so if an adversary were to discover a set of files containing *only* such sizes, or even just one larger file that happens to be exactly on one of the padme sizes, he can reasonably assert that it is in fact padme-padded encrypted data. Covert maintains confidentiality and deniability by producing output file sizes that reveal very little of either the content or the packaging.
 
@@ -158,20 +160,22 @@ Finally, strings are always encoded in UTF-8 without BOM. Any text stored in Msg
 
 The time cost depends on the number of **bytes** in the UTF-8 encoded password. Passwords shorter than 8 bytes are not accepted at all. Passwords shorter than 8 *characters* in foreign languages may be permissible.
 
-Passwords are always prehashed with `sha512("covert:" + password)[:32]` to obtain the input to Argon2 (in binary, not hex). Normally this occurs directly before Argon2, without ever storing the prehash anywhere, but this stage is to allow storage and transmission of a prehash rather than plain text e.g. in keystores or web frontends (which still need to provide the time cost parameter separately).
-
 |Parameter|Passphrase bytes|Value|
 |---|---:|---|
-|hash_len||32||
-|time_cost|8|512|
-||9|128|
+|hash_len||16|
+|salt||`covertpassphrase` (16 bytes)|
+|time_cost|8|128|
+||9|64|
 ||10|32|
-||≥ 11|8|
-|mem_cost||200 MiB|
+||11|16|
+||≥ 12|8|
+|mem_cost||256 MiB|
 |parallelism||1|
 |type||Argon2id|
 
-Hashing the shortest passwords may take several minutes on mobile devices or browsers and a dozen seconds even on fast PCs. This is necessary to secure such weak passwords. Even with the time cost tweak, a longer password will in general be much more secure. Users are encouraged to choose longer passphrases to avoid the delay.
+The time cost may be calculated by `8 << max(0, 12 - len(pwd))`. Hashing the shortest passwords takes half a minute on mobile devices or browsers and 10 seconds even on fast PCs. This is necessary to secure such weak passwords. Even with the time cost tweak, a longer password will be much more secure. Users are encouraged to choose longer passphrases to avoid the delay. Long passwords take about a second to hash depending on the device. The password hash, once calculated, may be stored in device RAM or in a secure keystore for subsequent uses, avoiding the slow hashing. The Argon2 hash if leaked can be used to decrypt all files encrypted with that password but the slowness of the hashing makes it quite impossible to recover the original password or to construct rainbow tables which would need to be specific to Covert Encryption.
+
+The file nonce (12 bytes) is concatenated to the Argon2 pwhash (16 bytes) and hashed to obtain the auth key `key = sha512(pwhash + nonce)[:32]`. This final step ensures that a different key is always created despite using the same password, and the operation is fast so that many files can be encrypted or decrypted in rapid succession. Implementations should only calculate this using a locally generated random nonce, not accepting nonces from outside sources.
 
 ### Real-time streaming
 
