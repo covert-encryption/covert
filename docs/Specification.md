@@ -175,7 +175,11 @@ The time cost depends on the number of **bytes** in the UTF-8 encoded password. 
 
 The time cost may be calculated by `8 << max(0, 12 - len(pwd))`. Hashing the shortest passwords takes half a minute on mobile devices or browsers and 10 seconds even on fast PCs. This is necessary to secure such weak passwords. Even with the time cost tweak, a longer password will be much more secure. Users are encouraged to choose longer passphrases to avoid the delay. Long passwords take about a second to hash depending on the device. The password hash, once calculated, may be stored in device RAM or in a secure keystore for subsequent uses, avoiding the slow hashing. The Argon2 hash if leaked can be used to decrypt all files encrypted with that password but the slowness of the hashing makes it quite impossible to recover the original password or to construct rainbow tables which would need to be specific to Covert Encryption.
 
-The file nonce (12 bytes) is concatenated to the Argon2 pwhash (16 bytes) and hashed to obtain the auth key `key = sha512(pwhash + nonce)[:32]`. This final step ensures that a different key is always created despite using the same password, and the operation is fast so that many files can be encrypted or decrypted in rapid succession. Implementations should only calculate this using a locally generated random nonce, not accepting nonces from outside sources.
+```python
+key = sha512(pwhash + nonce)[:32]
+```
+
+The file nonce (12 bytes) is concatenated to the Argon2 pwhash (16 bytes) and hashed to obtain the auth key. This final step ensures that a different key is always created despite using the same password, and the operation is fast so that many files can be encrypted or decrypted in rapid succession. Implementations should only calculate this using a locally generated random nonce, not accepting nonces from outside sources.
 
 ### Real-time streaming
 
