@@ -1,5 +1,7 @@
 import mmap
 import os
+import itertools
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from io import BytesIO
 from pathlib import Path
@@ -9,7 +11,7 @@ from time import perf_counter
 import pyperclip
 from tqdm import tqdm
 
-from covert import passphrase, pubkey, tty, util
+from covert import lazyexec, passphrase, pubkey, tty, util
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
 
@@ -122,43 +124,55 @@ def run_decryption(infile, args, passwords, identities):
 
 
 def main_enc(args):
-  vispw = []
   padding = .01 * float(args.padding) if args.padding is not None else .05
   if not 0 <= padding <= 3.0:
     raise ValueError('Invalid padding specified. The valid range is 0 to 300 %.')
-  passwords, vispw = [], []
   if not (args.askpass or args.passwords or args.recipients or args.recipfiles or args.wideopen):
     args.askpass = 1
-  l = args.askpass + len(args.passwords)
+  numpasswd = args.askpass + len(args.passwords)
+  passwords, vispw = [], []
   for i in range(args.askpass):
-    num = f" {i+1}/{l}" if l > 1 else ""
+    num = f" {i+1}/{numpasswd}" if numpasswd > 1 else ""
     pw, visible = passphrase.ask(f"New passphrase{num}", create=True)
     passwords.append(pw)
     if visible:
-      vispw.append(pw)
-  passwords += args.passwords
-  # Convert recipient definitions into keys
-  recipients = [pubkey.decode_pk(keystr) for keystr in args.recipients]
-  for fn in args.recipfiles:
-    recipients += pubkey.read_pk_file(fn)
-  # Unique recipient keys sorted by keystr
-  l = len(recipients)
-  recipients = list(sorted(set(recipients), key=str))
-  if len(recipients) < l:
-    stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
-  # Signatures
-  identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk]
-  signatures = identities = list(sorted(set(identities), key=str))
-  # Input files
-  if not args.files or True in args.files:
-    if stdin.isatty():
-      data = tty.editor()
-      # Prune surrounding whitespace
-      data = '\n'.join([l.rstrip() for l in data.split('\n')]).strip('\n')
-      stin = util.encode(data)
-    else:
-      stin = stdin.buffer
-    args.files = [stin] + [f for f in args.files if f != True]
+      vispw.append(pw.decode())
+    del pw
+  passwords += map(util.encode, args.passwords)
+  # Use threaded password hashing for parallel and background operation
+  with ThreadPoolExecutor(max_workers=4) as executor:
+    pwhasher = executor.map(passphrase.argon2, set(passwords))
+    # Convert recipient definitions into keys
+    recipients = [pubkey.decode_pk(keystr) for keystr in args.recipients]
+    for fn in args.recipfiles:
+      recipients += pubkey.read_pk_file(fn)
+    # Unique recipient keys sorted by keystr
+    l = len(recipients)
+    recipients = list(sorted(set(recipients), key=str))
+    if len(recipients) < l:
+      stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
+    # Signatures
+    signatures = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk}
+    signatures = list(sorted(signatures, key=str))
+    # Input files
+    if not args.files or True in args.files:
+      if stdin.isatty():
+        data = tty.editor()
+        # Prune surrounding whitespace
+        data = '\n'.join([l.rstrip() for l in data.split('\n')]).strip('\n')
+        stin = util.encode(data)
+      else:
+        stin = stdin.buffer
+      args.files = [stin] + [f for f in args.files if f != True]
+    # Collect the password hashing results
+    if passwords and stderr.isatty():
+      stderr.write("Password hashing... ")
+      stderr.flush()
+    pwhashes = set(pwhasher)
+    if passwords and stderr.isatty():
+      stderr.write("\r\x1B[K")
+      stderr.flush()
+    del passwords
   a = Archive()
   a.file_index(args.files)
   if signatures:
@@ -189,7 +203,7 @@ def main_enc(args):
     with tqdm(
       total=a.total_size, delay=1.0, ncols=78, unit='B', unit_scale=True, bar_format="{l_bar}         {bar}{r_bar}"
     ) as progress:
-      for block in encrypt_file((args.wideopen, passwords, recipients, signatures), a.encode, a):
+      for block in encrypt_file((args.wideopen, pwhashes, recipients, signatures), a.encode, a):
         progress.update(len(block))
         outf.write(block)
     # Pretty output printout
@@ -197,7 +211,7 @@ def main_enc(args):
       # Print a list of files
       lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
       methods = "  ".join(
-        [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (len(passwords) - len(vispw)) * ["🔑 <pw>"]
+        [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (numpasswd - len(vispw)) * ["🔑 <pw>"]
       )
       methods += f' 🔷 {a.filehash[:12].hex()}'
       for id in signatures:
@@ -217,7 +231,7 @@ def main_enc(args):
       data = util.armor_encode(data)
     if outf is not realoutf:
       if args.paste:
-        pyperclip.copy(f"```\n{data.decode()}\n```\n")
+        pyperclip.copy(f"```\n{data}\n```\n")
         return
       with realoutf:
         pretty = realoutf.isatty()
@@ -225,7 +239,7 @@ def main_enc(args):
           stderr.write("\x1B[1;30m```\x1B[0;34m\n")
           stderr.flush()
         try:
-          realoutf.write(data + b"\n")
+          realoutf.write(f"{data}\n".encode())
           realoutf.flush()
         finally:
           if pretty:
@@ -236,13 +250,16 @@ def main_enc(args):
 def main_dec(args):
   if len(args.files) > 1:
     raise ValueError("Only one input file is allowed when decrypting.")
-  identities = [key for keystr in args.identities for key in pubkey.read_sk_any(keystr)]
-  identities = list(sorted(set(identities), key=str))
+  # Ask for passphrase by default if no auth is specified
+  if not (args.askpass or args.passwords or args.identities):
+    args.askpass = 1
+  identities = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr)}
+  identities = list(sorted(identities, key=str))
   infile = open(args.files[0], "rb") if args.files else stdin.buffer
   # If ASCII armored or TTY, read all input immediately (assumed to be short enough)
   total_size = os.path.getsize(args.files[0]) if args.files else 0
   if infile.isatty():
-    data = util.armor_decode((pyperclip.paste() if args.paste else tty.read_hidden("Encrypted message")).encode())
+    data = util.armor_decode(pyperclip.paste() if args.paste else tty.read_hidden("Encrypted message"))
     if not data:
       raise KeyboardInterrupt
     infile = BytesIO(data)
@@ -253,13 +270,30 @@ def main_dec(args):
     with infile:
       data = infile.read()
     try:
-      infile = BytesIO(util.armor_decode(data))
+      infile = BytesIO(util.armor_decode(data.decode()))
     except Exception:
       infile = BytesIO(data)
   else:
     with suppress(OSError):
       infile = mmap.mmap(infile.fileno(), 0, access=mmap.ACCESS_READ)
-  run_decryption(infile, args, args.passwords, identities)
+  with ThreadPoolExecutor(max_workers=4) as executor:
+    pwhasher = lazyexec.map(executor, passphrase.argon2, {util.encode(pwd) for pwd in args.passwords})
+    def pwhashgen():
+      it = itertools.chain(pwhasher, (passphrase.argon2(passphrase.ask('Passphrase')[0]) for i in range(args.askpass)))
+      while True:
+        if stderr.isatty():
+          stderr.write("Password hashing... ")
+          stderr.flush()
+        try:
+          pwhash = next(it)
+        except StopIteration:
+          break
+        finally:
+          if stderr.isatty():
+            stderr.write("\r\x1B[K")
+            stderr.flush()
+        yield pwhash
+    run_decryption(infile, args, pwhashgen(), identities)
 
 
 def main_benchmark(args):

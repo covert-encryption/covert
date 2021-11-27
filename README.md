@@ -19,9 +19,7 @@ A message (base64 or binary) has no headers or anything else that could be recog
 HDGKMFEo5cYHtUF1w9aNlX1lMmWJD3B7p8HoBoQZTNJGjg/nUOMqlXLspmmVO7PQj8Pe
 ```
 
-Covert generates easy passphrases like `pinkmuletibetdemand` for the above. The encoded message includes random padding to hide the length of the message and it is still shorter than others.
-
-For comparison, `gpg` needs six lines instead of one and still ends up revealing the exact length of the message. It also claims that this passphrase is insecure while happily accepting very common passwords like `passw0rd` and `password1` (that are correctly rejected by Covert). Please, do not require digits or symbols in passphrases, it only weakens your security!
+Covert generates easy passphrases like `pinkmuletibetdemand` for the above. The encoded message includes random padding to hide the length of the message and it is still shorter than others. For comparison, `gpg` needs six lines instead of one and still ends up revealing the exact length of the message.
 
 ## Try it!
 
@@ -56,6 +54,12 @@ A completely different ciphertext is produced each time, usually of different si
 Covert messages are much shorter than with other cryptosystems, accomplished by some ingenious engineering.
 
 A key insight is that a receiver can *blindly* attempt to decrypt a file with many different keys and parameters until he finds a combination that authenticates successfully. This saves valuable space on short messages and improves security because no plain text headers are needed.
+
+![Screenshot](https://github.com/covert-encryption/covert/raw/main/docs/covert-gui.webp)
+
+## A secure desktop app
+
+Covert comes with a graphical user interface built in. Unlike PGP GUIs, Covert does not use external CLI tools but instead does everything inside the app. Storing the plain text message on disk at any point exposes it to forensic researchers and hackers who might be scanning your drive for deleted files, and unfortunately there have been such leaks with popular PGP programs that use temporary files to communicate with external editors or with the `gpg` tool.
 
 ## Additional reading
 

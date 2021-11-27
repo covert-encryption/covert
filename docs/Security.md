@@ -26,7 +26,7 @@ Any input on this field would be particularly welcome!
 
 ## Yubikeys
 
-Unfortunately the current generation of security tokens cannot be used with public key encryption. Let us know if you know of any products that can use shared ed25519/x25519 keys.
+There is limited support for encryption on these devices. Age already implements a plugin but that can only use identities generated in Age, not existing keys.
 
 ## Thread analysis
 
@@ -66,7 +66,9 @@ The Base64 encoded format lessens the first guarantee, as one might identify the
 
 ### Public key
 
-The header field `ecdhpk` if not scrambled could be verified as a valid curve element, rather than random bytes.
+The header field `ephash` is scrambled because a plain ephemeral public key could be verified as a valid curve element, with significant confidence if several files were inspected. In plain keys the highest bit is always zero and only half of the remaining values are used. [Elligator2 hashing](https://www.shiftleft.org/papers/elligator/elligator.pdf) is used on this field. Normal Curve25519 keys leave two bits of entropy unused but since Elligator2 rejects half of otherwise possible keys, there are three bits to fill. One is a sign bit, unused in Curve25519 schemes but still encoded (and scrambled) in Elligator2. The resulting hash still leaves the two highest bits zeroes. These three bits could be used to carry information, in particular the sign bits of Ed25519 keys, e.g. the sign bits of randomly generated Ed25519 keys. Covert has no use for any such data, and uses secure random bits instead, making the ephemeral key hash indistinguishable from random data.
+
+It is also important that the key is under no circumstances known to outsiders, as comparing with a known public key would reveal file contents. Ephemeral keys are randomly generated each time that something is encrypted, so we can be sure of having random-looking bits to start with and of never reusing the same bits anywhere else.
 
 ### Auth fields
 

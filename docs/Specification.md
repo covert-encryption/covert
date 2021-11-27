@@ -6,13 +6,13 @@ A file begins with a cryptographic header, followed by one or more encrypted aut
 
 `header` `block0` `block1`...`blockN` `signature`*
 
-The header contains tokens neded for decrypting block0, given suitable passwords or private keys. `ephpk` stores an ephemeral public key, always randomly created for each file, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (short mode) or by stealing bytes of `ephpk` (advanced mode). There may be up to 20 recipients, each a shared password or a public key. A short mode is provided for simple cases where 12 bytes header overhead is sufficient. Otherwise the header size is 32 bytes times the number of recipients, although decoy entries filled with random bytes may be added to obscure the number of recipients.
+The header contains tokens neded for decrypting block0, given suitable passwords or private keys. `ephash` stores an ephemeral public key hash, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (short mode) or by stealing bytes of `ephash` (advanced mode). There may be up to 20 recipients, each a shared password or a public key. A short mode is provided for simple cases where 12 bytes header overhead is sufficient. Otherwise the header size is 32 bytes times the number of recipients, although decoy entries filled with random bytes may be added to obscure the number of recipients.
 
 | Header format | Mode | Description |
 |:---|:---|:---|
 | `nonce:12` | Short | Single password `key = argon2(pw, nonce)` or wide-open `key = zeroes(32)`. |
-| `ephpk:32` | Advanced | Single pubkey `key = sha512(nonce + ecdh(eph, receiver))[:32]` |
-| `ephpk:32` `auth1:32` `auth2:32` ... | Advanced | Multiple authentication methods (pubkeys and/or passwords). |
+| `ephash:32` | Advanced | Single pubkey `key = sha512(nonce + ecdh(eph, receiver))[:32]` |
+| `ephash:32` `auth1:32` `auth2:32` ... | Advanced | Multiple authentication methods (pubkeys and/or passwords). |
 
 The short mode saves space for the commonly used single password and wide-open cases, versus using the advanced mode. The header is only 12 bytes and the auth key is directly used as the file key used to encrypt all the blocks.
 
@@ -63,6 +63,7 @@ The short format is easily implemented by converting the int value decoded into 
 As of now no other index fields are specified, but likely additions include `s` key with a list of sender/signature names and public keys (both optional of course). [X3DH](https://signal.org/docs/specifications/x3dh/) and [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) metadata are also possible additions.
 
 ### Padding
+
 The padding is a randomly chosen number of `\xC0` bytes (msgpack NILs), and it can be added at any point where msgpack is expected, although typically it is left until the end of archive. A preferred size should be chosen e.g. as a proportion such as 5 % of total size. The maximum preferred size can be clamped to some upper bound to limit the waste of space. Never clamp the actual size, as doing so defeats the purpose of padding. The actual value is picked from the exponential distribution:
 
 ```python
@@ -70,6 +71,16 @@ padsize = int(round(random.expovariate(1.0 / size)))
 ```
 
 This gives good variation in the ciphertext length, such that one cannot guess the length and the meaning of a message by looking at the size of the ciphertext. The *mean length* will be `size` bytes. Most of the time the padding is shorter than that but occassionally it can be many times longer.
+
+![Padding size](https://github.com/covert-encryption/covert/raw/main/docs/in-out.png)
+Message data is shown in grey, and the padding added on top of it in orange. Covert padding is randomized, visualised by fading shades of orange. Another currently popular padding scheme Padme is shown for comparison. Covert implements fixed size padding for small files making anything smaller than that look exactly the same. If there is more content, there will on average be less padding, and not even the distribution of the randomness varies on such small files. Covert always adds a random component such that each size of output corresponds to a large scale of input sizes and datasets cannot easily be identified by the sizes that appear in output. Padme reveals small file sizes exactly and for each output size there is only a strict range of possible input sizes.
+
+The deterministic approach may seem better if an adversary can somehow request the file to be encrypted many times to collect data on variation of size knowing that the target is always the same. For most practical uses, randomness is a better choice.
+
+![Output size distribution](https://github.com/covert-encryption/covert/raw/main/docs/distribution.png)
+If only specific known sizes are produced, it may be possible to identify which scheme was used. The output file sizes should be distributed such that any byte size is likely to occur. Padme produces only a set of very distinct sizes, so if an adversary were to discover a set of files containing *only* such sizes, or even just one larger file that happens to be exactly on one of the padme sizes, he can reasonably assert that it is in fact padme-padded encrypted data. Covert maintains confidentiality and deniability by producing output file sizes that reveal very little of either the content or the packaging.
+
+The amount of padding, along with the fixed size level, may be adjusted by the `--pad` parameter on covert CLI to cater for different security and space usage trade offs.
 
 ## Signatures
 
@@ -106,6 +117,33 @@ Single character dict keys are reserved to the format. Users may add custom meta
 
 The use of any unnecessary metadata, e.g. any names of programs used, is heavily discouraged.
 
+### Ephemeral key hashing
+
+A fresh ephemeral keypair is created for each Covert file. This is part of a standard ECDH exchange that makes up the public key system. The ephemeral public key is written to the file so that the recipient can, together with his secret key, decrypt the contents. The sender derives a shared key using the ephemeral secret key with the recipient public key and the immediately destroys the ephemeral key, so that he can no longer open the file.
+
+A plain public key if stored in the header could be verified by outsiders as a valid key (with 25 % likelyhood of being just random data). Instead, Elligator2 hashing is used such that all bits are indistinguishable from random data. As per Elligator2, one needs to create random ephemeral keys until one that fits the encoding is found (half of attempts fail). Three additional random bits are needed in encoding, one for v coordinate sign that gets scrambled and stored in the hash, and two others to fill the otherwise zero high bits of Elligator2 output.
+
+The receiver reverses this process, masking out the two high bit, then unhashing to recover the u coordinate (i.e. the ephemeral public key), while ignoring the v coordinate and its sign (Curve25519 never uses the v coordinate).
+
+Depending on the sign bit two very distinct hashes as created, each in four variations by the other two bits in the final byte. Each of these eight possibilities should be produced equally likely, and each of them should be restored to identical bytes as the source key. Implementation of Elligator2 vary in their choice of the non-square value, making hashes incompatible. Covert uses value 2, while some implementations might be using sqrt(-1). Verify your code against the following test vectors:
+
+```
+# Ephemeral public key (Curve25519)
+2b6a365dc67959894a00a9e07d45215bb8679ce1a47929bb643195e3adfc1755
+
+# Possible ephash values (3 random bits give 8 possibilities)
+04c158c70b275e02c0020add985ca2d9f712ea4eb702dac283d6931e689b391c
+04c158c70b275e02c0020add985ca2d9f712ea4eb702dac283d6931e689b395c
+04c158c70b275e02c0020add985ca2d9f712ea4eb702dac283d6931e689b399c
+04c158c70b275e02c0020add985ca2d9f712ea4eb702dac283d6931e689b39dc
+c914aa274bb2ebfadf735eab268417e8f292712d9c05fa399aee7972b99f1a00
+c914aa274bb2ebfadf735eab268417e8f292712d9c05fa399aee7972b99f1a40
+c914aa274bb2ebfadf735eab268417e8f292712d9c05fa399aee7972b99f1a80
+c914aa274bb2ebfadf735eab268417e8f292712d9c05fa399aee7972b99f1ac0
+```
+
+The inverse hash should restore each of the variations to the exact same bytes as the original key.
+
 ### Endianess
 
 All integers are unsigned and encoded in **little endian**, unless specified otherwise by foreign formats such as MsgPack (which is big endian).
@@ -122,20 +160,26 @@ Finally, strings are always encoded in UTF-8 without BOM. Any text stored in Msg
 
 The time cost depends on the number of **bytes** in the UTF-8 encoded password. Passwords shorter than 8 bytes are not accepted at all. Passwords shorter than 8 *characters* in foreign languages may be permissible.
 
-Passwords are always prehashed with `sha512("covert:" + password)[:32]` to obtain the input to Argon2 (in binary, not hex). Normally this occurs directly before Argon2, without ever storing the prehash anywhere, but this stage is to allow storage and transmission of a prehash rather than plain text e.g. in keystores or web frontends (which still need to provide the time cost parameter separately).
-
 |Parameter|Passphrase bytes|Value|
 |---|---:|---|
-|hash_len||32||
-|time_cost|8|512|
-||9|128|
+|hash_len||16|
+|salt||`covertpassphrase` (16 bytes)|
+|time_cost|8|128|
+||9|64|
 ||10|32|
-||≥ 11|8|
-|mem_cost||200 MiB|
+||11|16|
+||≥ 12|8|
+|mem_cost||256 MiB|
 |parallelism||1|
 |type||Argon2id|
 
-Hashing the shortest passwords may take several minutes on mobile devices or browsers and a dozen seconds even on fast PCs. This is necessary to secure such weak passwords. Even with the time cost tweak, a longer password will in general be much more secure. Users are encouraged to choose longer passphrases to avoid the delay.
+The time cost may be calculated by `8 << max(0, 12 - len(pwd))`. Hashing the shortest passwords takes half a minute on mobile devices or browsers and 10 seconds even on fast PCs. This is necessary to secure such weak passwords. Even with the time cost tweak, a longer password will be much more secure. Users are encouraged to choose longer passphrases to avoid the delay. Long passwords take about a second to hash depending on the device. The password hash, once calculated, may be stored in device RAM or in a secure keystore for subsequent uses, avoiding the slow hashing. The Argon2 hash if leaked can be used to decrypt all files encrypted with that password but the slowness of the hashing makes it quite impossible to recover the original password or to construct rainbow tables which would need to be specific to Covert Encryption.
+
+```python
+key = sha512(pwhash + nonce)[:32]
+```
+
+The file nonce (12 bytes) is concatenated to the Argon2 pwhash (16 bytes) and hashed to obtain the auth key. This final step ensures that a different key is always created despite using the same password, and the operation is fast so that many files can be encrypted or decrypted in rapid succession. Implementations should only calculate this using a locally generated random nonce, not accepting nonces from outside sources.
 
 ### Real-time streaming
 
