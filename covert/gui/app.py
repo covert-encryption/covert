@@ -4,9 +4,9 @@ from io import BytesIO
 
 from PySide6.QtCore import QRect, QSize, Qt, Slot
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel
-from PySide6.QtWidgets import QApplication, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListView, QMenu, QMenuBar, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QFileDialog, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QMenu, QMenuBar, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
 
-from covert import pubkey, util
+from covert import passphrase, pubkey, util
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
 from covert.cli import ARMOR_MAX_SIZE, TTY_MAX_SIZE
@@ -118,6 +118,11 @@ class MainWindow(QWidget):
     self.layout.addWidget(self.attachments, 6, 0, 1, -1)
     self.layout.addWidget(EncryptToolbar(app), 7, 0, 1, -1)
 
+    # Override CLI password asking with GUI version
+    passphrase.ask = self.askpass
+
+  def askpass(self, prompt, create=False):
+    return QInputDialog.getText(self, "Covert Encryption", f"{prompt}:", QLineEdit.Password, "")
 
   def update_encryption_views(self):
     self.auth.siginput.setText(', '.join(str(k) for k in self.app.signatures) or "Anonymous (no signature)")
