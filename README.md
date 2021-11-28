@@ -23,13 +23,13 @@ Covert generates easy passphrases like `pinkmuletibetdemand` for the above. The 
 
 ## Try it!
 
-[Python](https://www.python.org/downloads/) `pip` will add `qcovert` and `covert` on your system. Decrypt the above message to see what it says:
+[Python](https://www.python.org/downloads/) `pip` will add `qcovert` and `covert` on your system:
 
 ```
 pip install covert[gui]
 
-qcovert      # Run GUI
-covert dec   # Or decrypt on CLI
+qcovert      # Run GUI, or
+covert       # Run in terminal
 ```
 
 ## File I/O speeds matching the fastest SSDs
