@@ -19,6 +19,7 @@ setup(
   "Operating System :: OS Independent",
   ],
   install_requires=[
+  "colorama>=0.4",
   "pynacl>=1.4",
   "tqdm>=4.62",
   "msgpack>=1.0",

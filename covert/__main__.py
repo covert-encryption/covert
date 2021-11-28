@@ -1,7 +1,7 @@
 import os
 import sys
 from sys import stderr, stdout
-
+import colorama
 import covert
 from covert.cli import main_benchmark, main_dec, main_enc
 
@@ -151,6 +151,7 @@ def argparse():
 
 
 def main():
+  colorama.init()
   # CLI argument processing
   args = argparse()
   if len(args.outfile) > 1:
