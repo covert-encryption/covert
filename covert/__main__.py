@@ -1,3 +1,4 @@
+import os
 import sys
 from sys import stderr, stdout
 
@@ -150,6 +151,7 @@ def argparse():
 
 
 def main():
+  # CLI argument processing
   args = argparse()
   if len(args.outfile) > 1:
     raise ValueError('Only one output file may be specified')

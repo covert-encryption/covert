@@ -3,7 +3,8 @@ from setuptools import find_packages, setup
 setup(
   name="covert",
   author="Covert Encryption",
-  description="File and message encryption program",
+  author_email="covert-encryption@github",
+  description="File and message encryption GUI and CLI",
   long_description=open("README.md").read(),
   long_description_content_type="text/markdown",
   url="https://github.com/covert-encryption/covert",
@@ -18,8 +19,18 @@ setup(
   "Operating System :: OS Independent",
   ],
   install_requires=[
-    "pynacl>=1.4", "tqdm>=4.62", "msgpack>=1.0", "pyperclip>=1.8", "zxcvbn-covert>=5.0",
+  "pynacl>=1.4",
+  "tqdm>=4.62",
+  "msgpack>=1.0",
+  "pyperclip>=1.8",
+  "zxcvbn-covert>=5.0",
   ],
+  extras_require={
+    "gui": ["pyside6>=6.2.1"],
+  },
   include_package_data=True,
-  entry_points=dict(console_scripts=["covert = covert.__main__:main"]),
+  entry_points=dict(
+    console_scripts=["covert = covert.__main__:main"],
+    gui_scripts=["qcovert = covert.gui.__main__:main [gui]"],
+  ),
 )
