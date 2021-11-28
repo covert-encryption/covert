@@ -13,8 +13,8 @@ IS_APPLE = platform.system() == "Darwin"
 def armor_decode(data: str) -> bytes:
   """Base64 decode."""
   # Fix CRLF, remove any surrounding whitespace and code block markers
-  data = data.replace('\r\n', '\n').strip('\t `\n')
-  if not data.isascii() or not data.isprintable():
+  data = data.replace('\r\n', '\n').strip('`> \t\n')
+  if not data.isascii():
     raise ValueError(f"Invalid armored encoding: data is not ASCII/Base64")
   # Strip indent and quote marks, trailing whitespace and empty lines
   lines = [line for l in data.split('\n') if (line := l.lstrip('\t >').rstrip())]
@@ -31,9 +31,11 @@ def armor_decode(data: str) -> bytes:
     l2 = len(line)
     if l2 < 76 or l2 % 4 or l2 != l:
       raise ValueError(f"Invalid armored encoding: length {l2} of line {i + 1} is invalid")
-  # Not sure why we even bother to use the standard library after having handled all that...
   data = "".join(lines)
   padding = -len(data) % 4
+  if padding == 3:
+    raise ValueError(f"Invalid armored encoding: invalid length for Base64 sequence")
+  # Not sure why we even bother to use the standard library after having handled all that...
   return b64decode(data + padding*'=', validate=True)
 
 
