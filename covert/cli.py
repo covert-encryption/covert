@@ -141,7 +141,7 @@ def main_enc(args):
   passwords += map(util.encode, args.passwords)
   # Use threaded password hashing for parallel and background operation
   with ThreadPoolExecutor(max_workers=4) as executor:
-    pwhasher = executor.map(passphrase.argon2, set(passwords))
+    pwhasher = executor.map(passphrase.pwhash, set(passwords))
     # Convert recipient definitions into keys
     recipients = [pubkey.decode_pk(keystr) for keystr in args.recipients]
     for fn in args.recipfiles:
@@ -277,9 +277,9 @@ def main_dec(args):
     with suppress(OSError):
       infile = mmap.mmap(infile.fileno(), 0, access=mmap.ACCESS_READ)
   with ThreadPoolExecutor(max_workers=4) as executor:
-    pwhasher = lazyexec.map(executor, passphrase.argon2, {util.encode(pwd) for pwd in args.passwords})
+    pwhasher = lazyexec.map(executor, passphrase.pwhash, {util.encode(pwd) for pwd in args.passwords})
     def pwhashgen():
-      it = itertools.chain(pwhasher, (passphrase.argon2(passphrase.ask('Passphrase')[0]) for i in range(args.askpass)))
+      it = itertools.chain(pwhasher, (passphrase.pwhash(passphrase.ask('Passphrase')[0]) for i in range(args.askpass)))
       while True:
         if stderr.isatty():
           stderr.write("Password hashing... ")

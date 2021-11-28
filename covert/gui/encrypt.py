@@ -103,7 +103,7 @@ class AuthInput(QWidget):
         self.notes.setText(2*'\n' + "A stronger password is required.")
         return
       note = "Passphrase added."
-    self.app.passwords.add(passphrase.argon2(util.encode(pw)))
+    self.app.passwords.add(passphrase.pwhash(util.encode(pw)))
     self.app.window.plaintext.setFocus()
     self.pw.setText("")
     self.validator.validate(pw, 0)
