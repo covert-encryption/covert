@@ -1,6 +1,5 @@
 import secrets
 from contextlib import suppress
-from hashlib import sha512
 from sys import argv
 
 import nacl.bindings as sodium
@@ -32,25 +31,29 @@ def costfactor(pwd: bytes):
   return 1 << max(0, 12 - len(pwd))
 
 
-def argon2(password: bytes) -> bytes:
-  """Argon2 hash a password."""
+def pwhash(password: bytes) -> bytes:
+  """Argon2 hash a password (stage 1)"""
   if len(password) < MINLEN:
     raise ValueError("Too short password")
-  return sodium.crypto_pwhash_alg(
-    outlen=16,
-    passwd=password,
-    salt=b"covertpassphrase",
-    opslimit=8 * costfactor(password),
-    memlimit=200 << 20,
-    alg=sodium.crypto_pwhash_ALG_ARGON2ID13,
-  )
+  return _argon2(16, password, b"covertpassphrase", 8 * costfactor(password))
 
 
 def authkey(pwhash: bytes, nonce: bytes) -> bytes:
-  """Calculate a file-specific auth key using a password with file nonce."""
+  """Argon2 hash a pwhash with the file nonce (stage 2)"""
   if len(pwhash) != 16 or len(nonce) != 12:
     raise Exception(f"Invalid arguments {pwhash=} {nonce=}")
-  return sha512(pwhash + nonce).digest()[:32]
+  return _argon2(32, nonce, pwhash, 2)
+
+
+def _argon2(outlen, passwd, salt, ops):
+  return sodium.crypto_pwhash_alg(
+    outlen=outlen,
+    passwd=passwd,
+    salt=salt,
+    opslimit=ops,
+    memlimit=1 << 28,
+    alg=sodium.crypto_pwhash_ALG_ARGON2ID13,
+  )
 
 
 def autocomplete(pwd, pos):
@@ -158,8 +161,8 @@ def pwhints(pwd: str):
     # Add one bit of entropy for each additional character (NIST entropy estimation)
     guesses <<= len(pwd) - maxlen
     del sugg[:]
-  # Estimate the time for our strong hashing (600 ms, 100 cores, 27 GB)
-  t = .6 / 100 * guesses
+  # Estimate the time for our strong hashing (700 ms, 100 cores, 27 GB)
+  t = .7 / 100 * guesses
   # Even stronger hashing of short passwords
   pwbytes = util.encode(pwd)
   factor = costfactor(pwbytes)

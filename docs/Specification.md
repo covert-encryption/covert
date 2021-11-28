@@ -109,6 +109,61 @@ Covert files and detached signatures may be converted into text strings that are
 
 There are no headers to make it distinct of any random data encoded in Base64, but for maximal privacy and the best performance, raw binary files should be used instead whenever possible.
 
+
+## Argon2 password hashing
+
+### Overview
+
+Password authentication is tricky because there simply is not enough entropy in passwords that people are willing to type in and memorize. The minimum password length is **8 bytes** and for such weak passwords very slow hashing is used to keep them secure, while longer passwords get faster hashing.
+
+All password inputs must be converted into Unicode Normalization Form KC, `NFKC`, and then encoded as UTF-8 bytes. This is to ensure compatibility between devices (Apple and Microsoft have incompatible encodings).
+
+The Argon2 hashing is performed in two stages with distinct functions.
+* Stage 1 is adaptive to password length, producing a 16 byte `pwhash`.
+* Stage 2 combines the `pwhash` with the unique `nonce` of each file.
+
+```python
+# Normalize and encode
+pw_bytes = normalize("NFKC", password).encode("UTF-8")
+
+# Stage 1
+time_cost = 8 << max(0, 12 - len(pw_bytes))
+pwhash = argon2id(hashlen=16, salt="covertpassphrase", password=pw_bytes, time_cost=time_cost)
+
+# Stage 2
+authkey = argon2d(hashlen=32, salt=pwhash, password=nonce, time_cost=2)
+```
+
+The `pwhash` may be kept in device RAM or in a secure keystore in case multiple files need to be processed, avoiding some slow hashing and keeping the original password always secure. The second stage is much faster but adds necessary protection against rainbow tables and provides each file with a unique `authkey` even when the same password is reused. See the **Layout** section above for further discussion on the auth keys.
+
+### Stage 1: Argon2 on password
+
+|Parameter|Passphrase bytes|Value|
+|---|---:|---|
+|hash_len||16|
+|time_cost|8|128|
+||9|64|
+||10|32|
+||11|16|
+||≥ 12|8|
+|mem_cost||256 MiB|
+|parallelism||1|
+|type||Argon2id|
+
+The salt is always `covertpassphrase` (16 bytes)
+
+### Stage 2: Argon2 on nonce and pwhash
+
+|Parameter|Value|
+|---|---|
+|hash_len|32|
+|time_cost|2|
+|mem_cost||256 MiB|
+|parallelism||1|
+|type||Argon2id|
+
+Notice that in this stage the roles of salt and password are reversed because libsodium requires a salt of exactly 16 bytes, matching the pwhash but not the 12-byte nonce.
+
 ## Miscellaneus details
 
 ### Extensions
@@ -155,31 +210,6 @@ Text given as a message in terminal or other text input should be normalized by 
 All Unicode, filenames and passwords in particular, must be normalized into **NFKC format**. Apple devices natively use NFD, which causes problems with passwords and filenames if not properly normalized. Strings extracted from Covert files should alike be transformed back to platform-native format as needed.
 
 Finally, strings are always encoded in UTF-8 without BOM. Any text stored in MsgPack objects uses the string rather than the binary format.
-
-### Argon2 password hashing
-
-The time cost depends on the number of **bytes** in the UTF-8 encoded password. Passwords shorter than 8 bytes are not accepted at all. Passwords shorter than 8 *characters* in foreign languages may be permissible.
-
-|Parameter|Passphrase bytes|Value|
-|---|---:|---|
-|hash_len||16|
-|salt||`covertpassphrase` (16 bytes)|
-|time_cost|8|128|
-||9|64|
-||10|32|
-||11|16|
-||≥ 12|8|
-|mem_cost||256 MiB|
-|parallelism||1|
-|type||Argon2id|
-
-The time cost may be calculated by `8 << max(0, 12 - len(pwd))`. Hashing the shortest passwords takes half a minute on mobile devices or browsers and 10 seconds even on fast PCs. This is necessary to secure such weak passwords. Even with the time cost tweak, a longer password will be much more secure. Users are encouraged to choose longer passphrases to avoid the delay. Long passwords take about a second to hash depending on the device. The password hash, once calculated, may be stored in device RAM or in a secure keystore for subsequent uses, avoiding the slow hashing. The Argon2 hash if leaked can be used to decrypt all files encrypted with that password but the slowness of the hashing makes it quite impossible to recover the original password or to construct rainbow tables which would need to be specific to Covert Encryption.
-
-```python
-key = sha512(pwhash + nonce)[:32]
-```
-
-The file nonce (12 bytes) is concatenated to the Argon2 pwhash (16 bytes) and hashed to obtain the auth key. This final step ensures that a different key is always created despite using the same password, and the operation is fast so that many files can be encrypted or decrypted in rapid succession. Implementations should only calculate this using a locally generated random nonce, not accepting nonces from outside sources.
 
 ### Real-time streaming
 
