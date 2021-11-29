@@ -116,8 +116,8 @@ def ask(prompt, create=False):
       else:
         help += "\n  \x1B[1;34mtab  \x1B[0;34msuggest a strong password\n\x1B[1;34menter  \x1B[0;34mgenerate and use a strong password"
       help += "\n \x1B[1;34mdown  \x1B[0;34mhide input" if visible else "\n   \x1B[1;34mup  \x1B[0;34mshow input"
-      out += f'\n{help}\n\x1B[0m\x1B[K\x1B8'
-      out = out.replace('\n', '\x1B[K\n')
+      out += f'\n{help}\n\x1B[0m\x1B[0K\x1B8'
+      out = out.replace('\n', '\x1B[0K\n')
       term.write(out)
       for ch in term.reader():
         if len(ch) == 1:  # Text input

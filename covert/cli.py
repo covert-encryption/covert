@@ -168,7 +168,7 @@ def main_enc(args):
       sys.stderr.flush()
     pwhashes = set(pwhasher)
     if passwords and sys.stderr.isatty():
-      sys.stderr.write("\r\x1B[K")
+      sys.stderr.write("\r\x1B[0K")
       sys.stderr.flush()
     del passwords
   a = Archive()
@@ -287,7 +287,7 @@ def main_dec(args):
           break
         finally:
           if sys.stderr.isatty():
-            sys.stderr.write("\r\x1B[K")
+            sys.stderr.write("\r\x1B[0K")
             sys.stderr.flush()
         yield pwhash
     run_decryption(infile, args, pwhashgen(), identities)

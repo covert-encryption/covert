@@ -8,7 +8,7 @@ from shutil import get_terminal_size
 
 def editor():
   with fullscreen() as term:
-    term.write(f'\x1B[1;1H\x1B[1;44m   〰 ENTER MESSAGE 〰   (ESC to finish)\x1B[K\x1B[0m\n')
+    term.write(f'\x1B[1;1H\x1B[1;44m   〰 ENTER MESSAGE 〰   (ESC to finish)\x1B[0K\x1B[0m\n')
     data = ""
     startrow = row = col = 0
     while True:
@@ -57,7 +57,7 @@ def editor():
       win = get_terminal_size()
       startrow = min(max(0, row - 1), startrow)
       startrow = max(row - win.lines + 2, startrow)
-      draw = "\x1B[K\n".join(l[:win.columns - 1] for l in data.split("\n")[startrow:startrow + win.lines - 1])
+      draw = "\x1B[0K\n".join(l[:win.columns - 1] for l in data.split("\n")[startrow:startrow + win.lines - 1])
       term.write(f"\x1B[2;1H{draw}\x1B[J\x1B[{row - startrow + 2};{col+1}H")
 
 
@@ -84,7 +84,7 @@ def read_hidden(prompt):
         term.write(f"\x1B7  ({len(data)}) \x1B8")
     finally:
       # Return to start of line and clear the prompt
-      term.write(f"\x1B[0m\r\x1B[K")
+      term.write(f"\x1B[0m\r\x1B[0K")
 
 
 @contextmanager
