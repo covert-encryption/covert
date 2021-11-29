@@ -133,11 +133,11 @@ except (ImportError, AttributeError):
 
 @contextmanager
 def modeswitch(term):
-  term.write('\x1B[?1049h')
+  term.write('\x1B[?1049h\x1B[2J')
   try:
     yield
   finally:
-    term.write('\x1B[?1049l')
+    term.write('\x1B[2J\x1B[?1049l')
 
 
 @contextmanager
