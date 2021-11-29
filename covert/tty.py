@@ -1,5 +1,6 @@
 import io
 import os
+import sys
 import time
 from contextlib import contextmanager
 from shutil import get_terminal_size
@@ -7,7 +8,7 @@ from shutil import get_terminal_size
 
 def editor():
   with fullscreen() as term:
-    term.write(f'\x1B[1;1H\x1B[1;44m   〰 ENTER MESSAGE 〰   (ESC to finish)\x1B[K\x1B[0m\n')
+    term.write(f'\x1B[1;1H\x1B[1;44m   〰 ENTER MESSAGE 〰   (ESC to finish)\x1B[0K\x1B[0m\n')
     data = ""
     startrow = row = col = 0
     while True:
@@ -56,8 +57,8 @@ def editor():
       win = get_terminal_size()
       startrow = min(max(0, row - 1), startrow)
       startrow = max(row - win.lines + 2, startrow)
-      draw = "\x1B[K\n".join(l[:win.columns - 1] for l in data.split("\n")[startrow:startrow + win.lines - 1])
-      term.write(f"\x1B[2;1H{draw}\x1B[J\x1B[{row - startrow + 2};{col+1}H")
+      draw = "\x1B[0K\n".join(l[:win.columns - 1] for l in data.split("\n")[startrow:startrow + win.lines - 1])
+      term.write(f"\x1B[2;1H{draw}\x1B[0J\x1B[{row - startrow + 2};{col+1}H")
 
 
 def read_hidden(prompt):
@@ -80,10 +81,11 @@ def read_hidden(prompt):
           elif len(key) == 1:
             data += key
           t = time.monotonic()
-        term.write(f"\x1B7  ({len(data)}) \x1B8")
+        status = f"  ({len(data)}) "
+        term.write(f"{status}\x1B[{len(status)}D")
     finally:
       # Return to start of line and clear the prompt
-      term.write(f"\x1B[0m\r\x1B[K")
+      term.write(f"\x1B[0m\r\x1B[0K")
 
 
 @contextmanager
@@ -132,11 +134,11 @@ except (ImportError, AttributeError):
 
 @contextmanager
 def modeswitch(term):
-  term.write('\x1B[?1049h')
+  term.write('\x1B[?1049h\x1B[2J')
   try:
     yield
   finally:
-    term.write('\x1B[?1049l')
+    term.write('\x1B[2J\x1B[?1049l')
 
 
 @contextmanager
@@ -158,8 +160,9 @@ class Terminal:
       self.tty.flush()
     else:
       text = text.replace('\n', '\r\n')
-      for ch in text:
-        msvcrt.putwch(ch)
+      sys.stderr.write(text)
+      #for ch in text:
+      #  msvcrt.putwch(ch)
 
   def reader_windows(self):
     while True:
