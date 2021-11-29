@@ -1,11 +1,11 @@
 import mmap
 import os
+import sys
 import itertools
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from io import BytesIO
 from pathlib import Path
-from sys import stderr, stdin, stdout
 from time import perf_counter
 
 import pyperclip
@@ -63,7 +63,7 @@ def run_decryption(infile, args, passwords, identities):
         f = None
       if prev and prev.name is not None:
         r = '<renamed>' if prev.renamed else ''
-        progress.write(f'{prev.size:15,d} 📄 {prev.name:60}{r}', file=stderr)
+        progress.write(f'{prev.size:15,d} 📄 {prev.name:60}{r}', file=sys.stderr)
       if a.curfile:
         n = a.curfile.name or ''
         if not n and a.curfile.size is not None and a.curfile.size < TTY_MAX_SIZE:
@@ -72,7 +72,7 @@ def run_decryption(infile, args, passwords, identities):
           if not outdir:
             outdir = Path(args.outfile).resolve()
             outdir.mkdir(parents=True, exist_ok=True)
-            progress.write(f" ▶️ \x1B[1;34m  Extracting to \x1B[1;37m{outdir}\x1B[0m", file=stderr)
+            progress.write(f" ▶️ \x1B[1;34m  Extracting to \x1B[1;37m{outdir}\x1B[0m", file=sys.stderr)
           name = outdir.joinpath(n)
           if not name.resolve().is_relative_to(outdir) or name.is_reserved():
             progress.close()
@@ -82,7 +82,7 @@ def run_decryption(infile, args, passwords, identities):
         elif outdir is None:
           outdir = False
           progress.write(
-            " ▶️ \x1B[1;34m  The archive contains files. To extract, use \x1B[1;37m-o PATH\x1B[0m", file=stderr
+            " ▶️ \x1B[1;34m  The archive contains files. To extract, use \x1B[1;37m-o PATH\x1B[0m", file=sys.stderr
           )
 
       # Next file
@@ -99,26 +99,26 @@ def run_decryption(infile, args, passwords, identities):
   if progress:
     progress.close()
   # Print any messages
-  pretty = stdout.isatty()
+  pretty = sys.stdout.isatty()
   for i, m in enumerate(messages):
     if pretty:
-      stderr.write("\x1B[1m 💬\n\x1B[1;34m")
-      stderr.flush()
+      sys.stderr.write("\x1B[1m 💬\n\x1B[1;34m")
+      sys.stderr.flush()
       # Replace dangerous characters
       m = ''.join(c if c.isprintable() or c in ' \t\n' else f'\x1B[31m{repr(c)[1:-1]}\x1B[1;34m' for c in m)
     try:
       print(m)
     finally:
       if pretty:
-        stderr.write(f"\x1B[0m")
-        stderr.flush()
+        sys.stderr.write(f"\x1B[0m")
+        sys.stderr.flush()
   # Print signatures
-  stderr.write(f' 🔷 File hash: {a.filehash[:12].hex()}\n')
+  sys.stderr.write(f' 🔷 File hash: {a.filehash[:12].hex()}\n')
   for valid, key, text in a.signatures:
     if valid:
-      stderr.write(f" ✅ {key} {text}\n")
+      sys.stderr.write(f" ✅ {key} {text}\n")
     else:
-      stderr.write(f"\x1B[1;31m ❌ {key} {text}\x1B[0m\n")
+      sys.stderr.write(f"\x1B[1;31m ❌ {key} {text}\x1B[0m\n")
 
 
 def main_enc(args):
@@ -148,36 +148,36 @@ def main_enc(args):
     l = len(recipients)
     recipients = list(sorted(set(recipients), key=str))
     if len(recipients) < l:
-      stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
+      sys.stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
     # Signatures
     signatures = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk}
     signatures = list(sorted(signatures, key=str))
     # Input files
     if not args.files or True in args.files:
-      if stdin.isatty():
+      if sys.stdin.isatty():
         data = tty.editor()
         # Prune surrounding whitespace
         data = '\n'.join([l.rstrip() for l in data.split('\n')]).strip('\n')
         stin = util.encode(data)
       else:
-        stin = stdin.buffer
+        stin = sys.stdin.buffer
       args.files = [stin] + [f for f in args.files if f != True]
     # Collect the password hashing results
-    if passwords and stderr.isatty():
-      stderr.write("Password hashing... ")
-      stderr.flush()
+    if passwords and sys.stderr.isatty():
+      sys.stderr.write("Password hashing... ")
+      sys.stderr.flush()
     pwhashes = set(pwhasher)
-    if passwords and stderr.isatty():
-      stderr.write("\r\x1B[K")
-      stderr.flush()
+    if passwords and sys.stderr.isatty():
+      sys.stderr.write("\r\x1B[K")
+      sys.stderr.flush()
     del passwords
   a = Archive()
   a.file_index(args.files)
   if signatures:
     a.index['s'] = [s.edpk for s in signatures]
   # Output files
-  realoutf = open(args.outfile, "wb") if args.outfile else stdout.buffer
-  if args.armor or not args.outfile and stdout.isatty():
+  realoutf = open(args.outfile, "wb") if args.outfile else sys.stdout.buffer
+  if args.armor or not args.outfile and sys.stdout.isatty():
     if a.total_size > (ARMOR_MAX_SIZE if args.outfile else TTY_MAX_SIZE):
       if not args.outfile:
         raise ValueError("Too much data for console. How about -o FILE to write a file?")
@@ -189,10 +189,10 @@ def main_enc(args):
   def nextfile_callback(prev, cur):
     if prev:
       s, n = prev.size, prev.name
-      progress.write(f'{s:15,d} 📄 {n:60}' if n else f'{s:15,d} 💬 <message>', file=stderr)
+      progress.write(f'{s:15,d} 📄 {n:60}' if n else f'{s:15,d} 💬 <message>', file=sys.stderr)
     if not cur:
       a.random_padding(padding)
-      progress.write(f'\x1B[1;30m{a.padding:15,d} ⬛ <padding>\x1B[0m', file=stderr)
+      progress.write(f'\x1B[1;30m{a.padding:15,d} ⬛ <padding>\x1B[0m', file=sys.stderr)
 
   a.nextfilecb = nextfile_callback
   # Main processing
@@ -204,7 +204,7 @@ def main_enc(args):
         progress.update(len(block))
         outf.write(block)
     # Pretty output printout
-    if stderr.isatty():
+    if sys.stderr.isatty():
       # Print a list of files
       lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
       methods = "  ".join(
@@ -220,8 +220,8 @@ def main_enc(args):
       elif args.paste:
         lock += f"  📋 copied\n"
       out = f"\n\x1B[1m{lock}\x1B[0m\n"
-      stderr.write(out)
-      stderr.flush()
+      sys.stderr.write(out)
+      sys.stderr.flush()
     if outf is not realoutf:
       outf.seek(0)
       data = outf.read()
@@ -233,15 +233,15 @@ def main_enc(args):
       with realoutf:
         pretty = realoutf.isatty()
         if pretty:
-          stderr.write("\x1B[1;30m```\x1B[0;34m\n")
-          stderr.flush()
+          sys.stderr.write("\x1B[1;30m```\x1B[0;34m\n")
+          sys.stderr.flush()
         try:
           realoutf.write(f"{data}\n".encode())
           realoutf.flush()
         finally:
           if pretty:
-            stderr.write("\x1B[1;30m```\x1B[0m\n")
-            stderr.flush()
+            sys.stderr.write("\x1B[1;30m```\x1B[0m\n")
+            sys.stderr.flush()
 
 
 def main_dec(args):
@@ -252,7 +252,7 @@ def main_dec(args):
     args.askpass = 1
   identities = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr)}
   identities = list(sorted(identities, key=str))
-  infile = open(args.files[0], "rb") if args.files else stdin.buffer
+  infile = open(args.files[0], "rb") if args.files else sys.stdin.buffer
   # If ASCII armored or TTY, read all input immediately (assumed to be short enough)
   total_size = os.path.getsize(args.files[0]) if args.files else 0
   if infile.isatty():
@@ -278,17 +278,17 @@ def main_dec(args):
     def pwhashgen():
       it = itertools.chain(pwhasher, (passphrase.pwhash(passphrase.ask('Passphrase')[0]) for i in range(args.askpass)))
       while True:
-        if stderr.isatty():
-          stderr.write("Password hashing... ")
-          stderr.flush()
+        if sys.stderr.isatty():
+          sys.stderr.write("Password hashing... ")
+          sys.stderr.flush()
         try:
           pwhash = next(it)
         except StopIteration:
           break
         finally:
-          if stderr.isatty():
-            stderr.write("\r\x1B[K")
-            stderr.flush()
+          if sys.stderr.isatty():
+            sys.stderr.write("\r\x1B[K")
+            sys.stderr.flush()
         yield pwhash
     run_decryption(infile, args, pwhashgen(), identities)
 
