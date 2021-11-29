@@ -1,5 +1,6 @@
 import io
 import os
+import sys
 import time
 from contextlib import contextmanager
 from shutil import get_terminal_size
@@ -158,8 +159,9 @@ class Terminal:
       self.tty.flush()
     else:
       text = text.replace('\n', '\r\n')
-      for ch in text:
-        msvcrt.putwch(ch)
+      sys.stderr.write(text)
+      #for ch in text:
+      #  msvcrt.putwch(ch)
 
   def reader_windows(self):
     while True:
