@@ -29,13 +29,13 @@ def run_decryption(infile, args, passwords, identities):
     if isinstance(data, dict):
       # Header parsed, check the file list
       for i, infile in enumerate(a.flist):
-        if 'n' not in infile:
-          if 's' not in infile or infile['s'] > TTY_MAX_SIZE:
-            infile['n'] = f'noname.{i+1:03}'
-            infile['renamed'] = True
-        elif infile['n'][0] == '.':
-          infile['n'] = f"noname.{i+1:03}{infile['n']}"
-          infile['renamed'] = True
+        if infile.name is None:
+          if infile.size is None or infile.size > TTY_MAX_SIZE:
+            infile.name = f'noname.{i+1:03}'
+            infile.renamed = True
+        elif infile.name[0] == '.':
+          infile.name = f"noname.{i+1:03}{infile['n']}"
+          infile.renamed = True
       progress = tqdm(
         ncols=78,
         unit='B',
@@ -55,20 +55,18 @@ def run_decryption(infile, args, passwords, identities):
             messages.append(data.decode())
           except UnicodeDecodeError:
             pidx = a.flist.index(prev)
-            prev['n'] = f"noname.{pidx + 1:03}"
-            prev['renamed'] = True
-            with get_writable_file(prev['n']) as f2:
+            prev.name = f"noname.{pidx + 1:03}"
+            prev.renamed = True
+            with get_writable_file(prev.name) as f2:
               f2.write(data)
         f.close()
         f = None
-      if prev and 'n' in prev:
-        n = prev['n']
-        s = prev['s']
-        r = '<renamed>' if 'renamed' in prev else ''
-        progress.write(f'{s:15,d} 📄 {n:60}{r}', file=stderr)
+      if prev and prev.name is not None:
+        r = '<renamed>' if prev.renamed else ''
+        progress.write(f'{prev.size:15,d} 📄 {prev.name:60}{r}', file=stderr)
       if a.curfile:
-        n = a.curfile.get('n', '')
-        if not n and a.curfile.get('s', float('inf')) < TTY_MAX_SIZE:
+        n = a.curfile.name or ''
+        if not n and a.curfile.size is not None and a.curfile.size < TTY_MAX_SIZE:
           f = BytesIO()
         elif args.outfile:
           if not outdir:
@@ -190,8 +188,7 @@ def main_enc(args):
   # Print files during encoding and update padding size at the end
   def nextfile_callback(prev, cur):
     if prev:
-      s = prev.get('s')
-      n = prev.get('n')
+      s, n = prev.size, prev.name
       progress.write(f'{s:15,d} 📄 {n:60}' if n else f'{s:15,d} 💬 <message>', file=stderr)
     if not cur:
       a.random_padding(padding)
