@@ -10,6 +10,54 @@ from covert import util
 
 assert msgpack.version >= (1, 0, 0), 'Old 0.5.6 version creates invalid archives.'
 
+class FileRecord(list):
+  """A list of [size, name, meta], with convenience property access."""
+  def __init__(self, iterable=None):
+    if iterable is None:
+      iterable = [None, None, {}]
+    super().__init__(iterable)
+    self.renamed = False
+    # Basic validation
+    if len(self) != 3:
+      raise ValueError('Invalid file record')
+    if not (self.size is None or isinstance(self.size, int) and self.size >= 0):
+      raise ValueError('Invalid or corrupted archive, found invalid file size.')
+    if self.name is not None:
+      n = util.encode(self.name)
+      if not 0 < len(n) < 256:
+        raise ValueError('Invalid filename or corruption of archive.')
+      if not self.name.isprintable() or any(c in R'\:' for c in self.name) or self.name[0] == '/':
+        raise ValueError(f'Invalid filename {n!r}')
+    if not (isinstance(self[2], dict) and all(isinstance(k, str) for k in self[2].keys())):
+      raise ValueError('Invalid file meta or corruption of archive.')
+
+  @property
+  def size(self):
+    return self[0]
+
+  @size.setter
+  def size(self, value):
+    self[0] = value
+
+  @property
+  def name(self):
+    return self[1]
+
+  @name.setter
+  def name(self, value):
+    self[1] = value
+
+  def __getitem__(self, index):
+    """Directly access meta fields"""
+    if isinstance(index, int):
+      return super().__getitem__(index)
+    return self[2][index]
+
+  def __setitem__(self, index, value):
+    if isinstance(index, int):
+      return super().__setitem__(index, value)
+    self[2][index] = value
+
 
 class Stage(IntEnum):
   INDEX = 0
@@ -45,14 +93,14 @@ class Archive:
 
   @property
   def bytesleft(self):
-    return None if self.fidx is None else self.flist[self.fidx]['s'] - self.fpos
+    return None if self.fidx is None else self.flist[self.fidx].size - self.fpos
 
   def nextfile(self):
     assert not self.bytesleft
     self.prevfile = self.curfile
     if self.stage in (Stage.FILE, Stage.FILE_STREAM):
       prev = self.curfile
-      if prev['s'] != self.fpos:
+      if prev.size != self.fpos:
         raise Exception(f'Archive.nextfile called with {self.curfile=} at {self.fpos=}')
       self.fidx += 1
     elif self.stage is Stage.INDEX:
@@ -64,9 +112,9 @@ class Archive:
       if self.nextfilecb:
         self.nextfilecb(self.prevfile, self.curfile)
       return False
-    if self.curfile.get('s') is None:
+    if self.curfile.size is None:
       self.stage = Stage.FILE_STREAM
-      self.curfile['s'] = 0
+      self.curfile.size = 0
     else:
       self.stage = Stage.FILE
     if self.nextfilecb:
@@ -75,10 +123,14 @@ class Archive:
 
   def encodeindex(self):
     """Choose format and return index bytes."""
-    if list(self.index.keys()) == ['f'] and len(self.flist) == 1 and list(self.flist[0].keys()) == ['s']:
+    # Test if self.index matches pattern {f: [[size, None, {}]]}
+    # FIXME: Python 3.10 pattern matching as soon as we can
+    size = self.index.get('f', [[None]])[0][0]
+    if isinstance(size, int) and self.index == {"f": [[size, None, {}]]}:
       # Now we can and want to use the short format
       self.format = 0
-      return msgpack.packb(self.index['f'][0]['s'])
+      return msgpack.packb(size)
+    # Use advanced format
     self.format = 1
     return msgpack.packb(self.index)
 
@@ -96,9 +148,7 @@ class Archive:
           continue
         num = self.file.readinto(block.data[block.pos:block.pos + self.bytesleft])
         if not num:
-          raise ValueError(
-            f"Unexpected end of file {self.curfile.get('n', self.curfile)} at {self.file.tell():,} bytes (was {self.curfile.get('s'):,} bytes)"
-          )
+          raise ValueError(f"Unexpected end of file {self.curfile.name} at {self.file.tell():,} of {self.curfile.size:,} bytes")
         block.pos += num
         self.fpos += num
         continue
@@ -119,7 +169,7 @@ class Archive:
           buffer[:5] = enclen
         elif n == 0:
           buffer = enclen
-          self.curfile['s'] = self.fpos
+          self.curfile.size = self.fpos
           self.nextfile()
         else:
           # Reformat buffer (rare so performance is no issue)
@@ -134,7 +184,7 @@ class Archive:
   @property
   def total_size(self):
     # A simple calculation, streaming files are at most partially included (extrasize)
-    return sum(f['s'] if 's' in f else 0 for f in self.flist) + self.extrasize
+    return sum(f.size or 0 for f in self.flist) + self.extrasize
 
   def random_padding(self, p=0.05):
     """Randomize the amount of padding. Can be called after adding files but before encoding."""
@@ -190,7 +240,7 @@ class Archive:
           if not isinstance(val, int) or val < 0:
             raise ValueError(f'Archive corrupted: expected file chunk size, got something else.')
           if val:
-            self.curfile['s'] = self.curfile.get('s', 0) + val
+            self.curfile.size += val
           else:
             yield self.nextfile()
         else:
@@ -206,23 +256,12 @@ class Archive:
   def decodeindex(self, index):
     # Convert short format to advanced format
     if isinstance(index, int):
-      index = dict(f=[dict(s=index)])
+      index = dict(f=[[index, None, {}]])
     if not isinstance(index, dict):
       raise ValueError('Archive index not found.')
     self.index = index
     if 'f' in index:
-      self.flist = index['f']
-      # Basic validation
-      for f in self.flist:
-        if 's' in f:
-          if not isinstance(f['s'], int) or f['s'] < 0:
-            raise ValueError('Invalid or corrupted archive, found negative file size.')
-        if 'n' in f:
-          n = f['n']
-          if not isinstance(n, str) or not 0 < len(n.encode()) < 256:
-            raise ValueError('Invalid filename or corruption of archive.')
-          if not n.isprintable() or any(c in R'\:' for c in n) or n[0] == '/':
-            raise ValueError(f'Invalid filename {n}')
+      self.flist = index['f'] = [FileRecord(l) for l in index['f']]
 
   def file_index(self, files):
     self.fds = []
@@ -250,31 +289,38 @@ class Archive:
               continue
             p.append(d)
           else:
-            name = "/".join(p)
-            size = os.path.getsize(f)
-            self.flist.append(dict(n=name, s=size))
+            fr = FileRecord()
+            fr.name = "/".join(p)
+            fr.size = os.path.getsize(f)
+            # Store UNIX executable flags
+            if os.name != "nt" and os.access(f, os.X_OK):
+              fr['x'] = True
+            self.flist.append(fr)
             self.fds.append(open(f, "rb"))
       elif isinstance(f, bytes):
-        self.flist.append(dict(s=len(f)))
+        fr = FileRecord()
+        fr.size = len(f)
+        self.flist.append(fr)
         self.fds.append(BytesIO(f))
       else:
-        data = f.read(10 << 20)
-        n = None
-        d = dict()
+        # No filename, so try to read all input to determine what we have
+        maxbuffer = 10 << 20
+        data = f.read(maxbuffer)
+        fr = FileRecord()
+        fr.size = None if len(data) == maxbuffer else len(data)
         if len(data) > 1e5:
-          d['n'] = 'noname.txt'
+          fr.name = 'noname.txt'  # Too long to be a message, make it a file
         try:
           data.decode()
         except UnicodeDecodeError:
-          d['n'] = 'noname.dat'
-        if len(data) == 10 << 20:
+          fr.name = 'noname.dat'  # Better make it a binary file
+        if fr.size is None:
           # Getting too much data to buffer all, needs streaming
           self.extrasize += len(data)
           self.fds.append(CombinedIO(data, f))
         else:
-          d['s'] = len(data)
           self.fds.append(BytesIO(data))
-        self.flist.append(d)
+        self.flist.append(fr)
     if self.flist:
       self.index['f'] = self.flist
 
