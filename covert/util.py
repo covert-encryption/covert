@@ -12,8 +12,8 @@ IS_APPLE = platform.system() == "Darwin"
 
 def armor_decode(data: str) -> bytes:
   """Base64 decode."""
-  # Fix CRLF, remove any surrounding whitespace and code block markers
-  data = data.replace('\r\n', '\n').strip('`> \t\n')
+  # Fix CRLF, remove any surrounding BOM, whitespace and code block markers
+  data = data.replace('\r\n', '\n').strip('\uFEFF`> \t\n')
   if not data.isascii():
     raise ValueError(f"Invalid armored encoding: data is not ASCII/Base64")
   # Strip indent and quote marks, trailing whitespace and empty lines
@@ -51,7 +51,7 @@ def armor_encode(data: bytes) -> str:
 
 def encode(s: str) -> bytes:
   """Unicode-normalizing UTF-8 encode."""
-  return unicodedata.normalize("NFKC", s).encode()
+  return unicodedata.normalize("NFKC", s.lstrip("\uFEFF")).encode()
 
 
 def decode_native(s: bytes) -> str:
