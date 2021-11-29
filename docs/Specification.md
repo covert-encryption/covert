@@ -53,14 +53,17 @@ Typical short messages can be stored in the short format with a minimal overhead
 
 ### The Index
 
-A dictionary, optionally with key `f` containing a list of files. Each file is a dict with optional keys `n: filename` and `s: size`, but this is subject to change into a list instead, avoiding some overhead of key names and simplifying the code. If no size is given, the file uses streaming (length before each chunk of data).
+The short format int value `size` maps to the following advanced format index and vice versa. Implementations are expected to perform this conversion, so we can discuss only the advanced format:
 
-The short format is easily implemented by converting the int value decoded into a corresponding full index:
 ```javascript
-{f: [{s: value}]}
+{f: [[size, null, {}]]}
 ```
 
-As of now no other index fields are specified, but likely additions include `s` key with a list of sender/signature names and public keys (both optional of course). [X3DH](https://signal.org/docs/specifications/x3dh/) and [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) metadata are also possible additions.
+Advanced index is a dictionary, optionally with key `f` containing a list of files.
+
+Each file entry is a list `[size, filename, meta]`. If size is null, the file uses streaming (length before each chunk of data). Filename is null for messages, a string for attachments / archived files. Meta is a dictionary that may contain additional flags but is usually empty. Currently only `{x: True}` is defined for UNIX executable files.
+
+As of now no other index fields are specified, but likely additions include `s` key with a list of sender/signature information. [X3DH](https://signal.org/docs/specifications/x3dh/) and [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) metadata are also possible additions.
 
 ### Padding
 
