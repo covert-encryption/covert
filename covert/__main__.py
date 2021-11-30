@@ -125,27 +125,49 @@ def argparse():
       args.files += args
       break
     if not a.startswith('--') and len(a) > 2:
-      stderr.write(f' 💣  Short arguments cannot be combined: covert {args.mode} {a}\n')
-      sys.exit(1)
+      shortargs = []
+      argvar = []
+      for x in ad.items():
+          for y in x[1]:
+              if y.startswith('--') and y.replace('--', '') in a:
+                  stderr.write(f' 💣  Multiple arguments cannot have long arguments: covert {args.mode} {a}\n')
+                  sys.exit(1)
+              elif y.startswith('-'):
+                  shortargs.append(y.replace('-',''))
+      for x in list(a[1:]):
+        if x not in shortargs:
+            stderr.write(f' 💣  {x} is not a short argument: covert {args.mode} {a}\n')
+            sys.exit(1)
+        argvar.append(next((k for k, v in ad.items() if f'-{x}' in v), None))
+        argvarlist = True
     if a.startswith('--'):
       a = a.lower()
-    argvar = next((k for k, v in ad.items() if a in v), None)
-    if argvar is None:
-      stderr.write(f'{modehelp}\n 💣  Unknown argument: covert {args.mode} {a}\n')
-      sys.exit(1)
     try:
-      var = getattr(args, argvar)
-      if isinstance(var, list):
-        var.append(next(aiter))
-      elif isinstance(var, str):
-        setattr(args, argvar, next(aiter))
-      elif isinstance(var, int):
-        setattr(args, argvar, var + 1)
-      else:
-        setattr(args, argvar, True)
-    except StopIteration:
-      stderr.write(f'{modehelp}\n 💣  Argument parameter missing: covert {args.mode} {a} …\n')
-      sys.exit(1)
+      argvarlist
+    except NameError:
+      argvar = next((k for k, v in ad.items() if a in v), None)
+      argvar = [argvar]
+    for x in range(0,len(argvar)):
+      if argvar[x] is None:
+        stderr.write(f'{modehelp}\n 💣  Unknown argument: covert {args.mode} {a}\n')
+        sys.exit(1)
+      try:
+        var = getattr(args, argvar[x])
+        if isinstance(var, list):
+          var.append(next(aiter))
+        elif isinstance(var, str):
+          setattr(args, argvar[x], next(aiter))
+        elif isinstance(var, int):
+          setattr(args, argvar[x], var + 1)
+        else:
+          setattr(args, argvar[x], True)
+        if isinstance(var, int) != True and var != None:
+          if var[0].startswith('-') or var[0].startswith('--'):
+            stderr.write(f'{modehelp}\n 💣  Argument parameter cannot start with "-": covert {args.mode} {a}\n')
+            sys.exit(1)
+      except StopIteration:
+        stderr.write(f'{modehelp}\n 💣  Argument parameter missing: covert {args.mode} {a} …\n')
+        sys.exit(1)
 
   return args
 
