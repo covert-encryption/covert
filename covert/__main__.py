@@ -114,7 +114,10 @@ def argparse():
     sys.exit(1)
 
   aiter = iter(av[1:])
+  longargs = [flag[1:] for switches in ad.values() for flag in switches if flag.startswith("--")]
+  shortargs = [flag[1:] for switches in ad.values() for flag in switches if not flag.startswith("--")]
   for a in aiter:
+    aprint = a
     if not a.startswith('-'):
       args.files.append(a)
       continue
@@ -124,49 +127,45 @@ def argparse():
     if a == '--':
       args.files += args
       break
-    if not a.startswith('--') and len(a) > 2:
-      shortargs = []
-      argvar = []
-      for x in ad.items():
-          for y in x[1]:
-              if y.startswith('--') and y.replace('--', '') in a:
-                  stderr.write(f' 💣  Multiple arguments cannot have long arguments: covert {args.mode} {a}\n')
-                  sys.exit(1)
-              elif y.startswith('-'):
-                  shortargs.append(y.replace('-',''))
-      for x in list(a[1:]):
-        if x not in shortargs:
-            stderr.write(f' 💣  {x} is not a short argument: covert {args.mode} {a}\n')
-            sys.exit(1)
-        argvar.append(next((k for k, v in ad.items() if f'-{x}' in v), None))
-        argvarlist = True
     if a.startswith('--'):
       a = a.lower()
-    try:
-      argvarlist
-    except NameError:
-      argvar = next((k for k, v in ad.items() if a in v), None)
-      argvar = [argvar]
-    for x in range(0,len(argvar)):
-      if argvar[x] is None:
-        stderr.write(f'{modehelp}\n 💣  Unknown argument: covert {args.mode} {a}\n')
+    if not a.startswith('--') and len(a) > 2:
+      if a not in longargs:
+        if any(longarg[1:] in a for longarg in longargs) is True:
+          stderr.write(f' 💣  Multiple arguments cannot have long arguments: covert {args.mode} {a}\n')
+          sys.exit(1)
+        elif any(arg not in shortargs for arg in list(a[1:])) == True:
+          falseargs = [arg for arg in list(a[1:]) if arg not in shortargs]
+          stderr.write(f' 💣  {falseargs} is not an argument: covert {args.mode} {a}\n')
+          sys.exit(1)
+        a = [f'-{shortarg}' for shortarg in list(a[1:]) if shortarg in shortargs]
+      else:
+        a = f'-{a}'
+    if isinstance(a, str) == True:
+      a = [a]
+    for i, av in enumerate(a):
+      argvar = next((k for k, v in ad.items() if av in v), None)
+      if isinstance(av, int) == True:
+        continue
+      if av is None:
+        stderr.write(f'{modehelp}\n 💣  Unknown argument: covert {args.mode} {aprint}\n')
         sys.exit(1)
       try:
-        var = getattr(args, argvar[x])
+        var = getattr(args, argvar)
         if isinstance(var, list):
           var.append(next(aiter))
         elif isinstance(var, str):
-          setattr(args, argvar[x], next(aiter))
+          setattr(args, argvar, next(aiter))
         elif isinstance(var, int):
-          setattr(args, argvar[x], var + 1)
+          setattr(args, argvar, var + 1)
         else:
-          setattr(args, argvar[x], True)
+          setattr(args, argvar, True)
         if isinstance(var, int) != True and var != None:
-          if var[0].startswith('-') or var[0].startswith('--'):
-            stderr.write(f'{modehelp}\n 💣  Argument parameter cannot start with "-": covert {args.mode} {a}\n')
+          if var[-1].startswith('-') or var[-1].startswith('--'):
+            stderr.write(f'{modehelp}\n 💣  Argument parameter cannot start with "-": covert {args.mode} {aprint}\n')
             sys.exit(1)
       except StopIteration:
-        stderr.write(f'{modehelp}\n 💣  Argument parameter missing: covert {args.mode} {a} …\n')
+        stderr.write(f'{modehelp}\n 💣  Argument parameter missing: covert {args.mode} {aprint} …\n')
         sys.exit(1)
 
   return args
