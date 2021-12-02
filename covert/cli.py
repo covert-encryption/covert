@@ -141,7 +141,14 @@ def main_enc(args):
   with ThreadPoolExecutor(max_workers=4) as executor:
     pwhasher = executor.map(passphrase.pwhash, set(passwords))
     # Convert recipient definitions into keys
-    recipients = [pubkey.decode_pk(keystr) for keystr in args.recipients]
+    recipients = []
+    for keystr in args.recipients:
+      try:
+        recipients.append(pubkey.decode_pk(keystr))
+      except ValueError as e:
+        if os.path.isfile(keystr):
+          raise ValueError(f"Unrecognized recipient string. Use a keyfile by -R {keystr}")
+        raise
     for fn in args.recipfiles:
       recipients += pubkey.read_pk_file(fn)
     # Unique recipient keys sorted by keystr
