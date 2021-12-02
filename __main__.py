@@ -116,6 +116,7 @@ def argparse():
   aiter = iter(av[1:])
   longargs = [flag[1:] for switches in ad.values() for flag in switches if flag.startswith("--")]
   shortargs = [flag[1:] for switches in ad.values() for flag in switches if not flag.startswith("--")]
+  print(shortargs)
   for a in aiter:
     aprint = a
     if not a.startswith('-'):
@@ -160,10 +161,12 @@ def argparse():
           setattr(args, argvar, var + 1)
         else:
           setattr(args, argvar, True)
+        print(var)
         if isinstance(var, int) is not True and var is not None:
           if var[-1].startswith('-') or var[-1].startswith('--'):
-            stderr.write(f'{modehelp}\n 💣  Argument parameter cannot start with "-": covert {args.mode} {aprint}\n')
-            sys.exit(1)
+            if var[-1][1:] in longargs or var[-1][1:] in shortargs:
+              stderr.write(f'{modehelp}\n 💣  Argument parameter cannot be the same with arguments: covert {args.mode} {aprint} {var[-1]} …\n')
+              sys.exit(1)
       except StopIteration:
         stderr.write(f'{modehelp}\n 💣  Argument parameter missing: covert {args.mode} {aprint} …\n')
         sys.exit(1)
