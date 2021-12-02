@@ -190,8 +190,6 @@ def decode_pk(keystr):
       return Key(keystr=keystr, comment="wg", pk=keybytes)
   except ValueError:
     pass
-  if os.path.isfile(keystr):
-    raise ValueError(f"Unrecognized key string {keystr} (is this a keyfile?)")
   raise ValueError(f"Unrecognized key {keystr}")
 
 
