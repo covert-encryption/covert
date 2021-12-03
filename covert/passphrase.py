@@ -120,7 +120,8 @@ def ask(prompt, create=False):
       help += "\n \x1B[1;34mdown  \x1B[0;34mhide input" if visible else "\n   \x1B[1;34mup  \x1B[0;34mshow input"
       out += f'\n{help}\n'
       out = out.replace('\n', '\x1B[0K\n')
-      out += f"\x1B[0m\x1B[0K\x1B[5;{1 + len(beforecursor)}H"
+      row = 5 if create else 3
+      out += f"\x1B[0m\x1B[0K\x1B[{row};{1 + len(beforecursor)}H"
       term.write(out)
       for ch in term.reader():
         if len(ch) == 1:  # Text input
