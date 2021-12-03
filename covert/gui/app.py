@@ -182,7 +182,11 @@ class MainWindow(QWidget):
     self.plaintext.clear()
     a = Archive()
     f = None
-    for data in a.decode(decrypt_file((self.app.passwords, self.app.identities), infile, a)):
+    def authgen():
+      # FIXME: Should wait for GUI input of auth methods instead
+      yield from self.app.identities
+      yield from self.app.passwords
+    for data in a.decode(decrypt_file(authgen(), infile, a)):
       if isinstance(data, dict):
         # Index
         pass
