@@ -35,7 +35,6 @@ def encrypt_header(auth):
 
 
 def decrypt_header(ciphertext, auth):
-  passwords, identities = auth
   if len(ciphertext) < 32:  # 12 nonce + 1 data + 3 nextlen + 16 tag
     raise ValueError("This file is too small to contain encrypted data.")
   nonce = util.noncegen(ciphertext[:12])
@@ -44,19 +43,17 @@ def decrypt_header(ciphertext, auth):
   key = bytes(32)
   with suppress(CryptoError):
     return *find_header_hend(ciphertext, n, key, 12), nonce
-  # Try public keys
+  # Try all auth methods
   eph = pubkey.Key(pkhash=ciphertext[:32])
-  for idkey in identities:
-    key = pubkey.derive_symkey(n, idkey, eph)
-    with suppress(CryptoError):
-      return *find_header_slots(ciphertext, n, key), nonce
-  # Try passwords
-  for a in passwords:
-    key = passphrase.authkey(a, n)
-    # Single password
-    with suppress(CryptoError):
-      return *find_header_hend(ciphertext, n, key, 12), nonce
-    # Multiple auth
+  for a in auth:
+    if isinstance(a, pubkey.Key):
+      key = pubkey.derive_symkey(n, a, eph)
+    else:
+      key = passphrase.authkey(a, n)
+      # Single password
+      with suppress(CryptoError):
+        return *find_header_hend(ciphertext, n, key, 12), nonce
+    # Multiple auth (pubkey or password)
     with suppress(CryptoError):
       return *find_header_slots(ciphertext, n, key), nonce
   raise ValueError("Unable to decrypt.")

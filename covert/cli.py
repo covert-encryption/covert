@@ -19,13 +19,13 @@ ARMOR_MAX_SIZE = 32 << 20  # If output is a file (limit our memory usage)
 TTY_MAX_SIZE = 100 << 10  # If output is a tty (limit too lengthy spam)
 
 
-def run_decryption(infile, args, passwords, identities):
+def run_decryption(infile, args, auth):
   a = Archive()
   progress = None
   outdir = None
   f = None
   messages = []
-  for data in a.decode(decrypt_file((passwords, identities), infile, a)):
+  for data in a.decode(decrypt_file(auth, infile, a)):
     if isinstance(data, dict):
       # Header parsed, check the file list
       for i, infile in enumerate(a.flist):
@@ -282,8 +282,8 @@ def main_dec(args):
       infile = mmap.mmap(infile.fileno(), 0, access=mmap.ACCESS_READ)
   with ThreadPoolExecutor(max_workers=4) as executor:
     pwhasher = lazyexec.map(executor, passphrase.pwhash, {util.encode(pwd) for pwd in args.passwords})
-    def pwhashgen():
-      it = itertools.chain(pwhasher, (passphrase.pwhash(passphrase.ask('Passphrase')[0]) for i in range(args.askpass)))
+    def authgen():
+      it = itertools.chain(identities, pwhasher, (passphrase.pwhash(passphrase.ask('Passphrase')[0]) for i in range(args.askpass)))
       while True:
         if sys.stderr.isatty():
           sys.stderr.write("Password hashing... ")
@@ -297,7 +297,7 @@ def main_dec(args):
             sys.stderr.write("\r\x1B[0K")
             sys.stderr.flush()
         yield pwhash
-    run_decryption(infile, args, pwhashgen(), identities)
+    run_decryption(infile, args, authgen())
 
 
 def main_benchmark(args):
