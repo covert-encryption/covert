@@ -82,10 +82,10 @@ def random_padding(total, p):
   if not p:
     return 0
   # Choose the amount of fixed padding to hide very short messages
-  low = int(p * 200)
+  low = int(p * 500)
   padfixed = max(0, low - total)
   # Calculate a preferred mean size and randomize
-  padsize = 2 + p * .7e8 * log2(1 + 1e-8 * max(low, total))
+  padsize = 1 + p * 200 + p * .7e8 * log2(1 + 1e-8 * max(low, total))
   padsize = int(round(random.expovariate(1.0 / padsize)))
   # Apply pad-to-fixed-size for very short messages plus random padding
   return padfixed + padsize

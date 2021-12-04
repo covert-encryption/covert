@@ -75,12 +75,12 @@ padsize = int(round(random.expovariate(1.0 / size)))
 
 This gives good variation in the ciphertext length, such that one cannot guess the length and the meaning of a message by looking at the size of the ciphertext. The *mean length* will be `size` bytes. Most of the time the padding is shorter than that but occassionally it can be many times longer.
 
-![Padding size](https://github.com/covert-encryption/covert/raw/main/docs/in-out.png)
+![Padding size](https://github.com/covert-encryption/covert/raw/main/docs/in-out.webp)
 Message data is shown in grey, and the padding added on top of it in orange. Covert padding is randomized, visualised by fading shades of orange. Another currently popular padding scheme Padme is shown for comparison. Covert implements fixed size padding for small files making anything smaller than that look exactly the same. If there is more content, there will on average be less padding, and not even the distribution of the randomness varies on such small files. Covert always adds a random component such that each size of output corresponds to a large scale of input sizes and datasets cannot easily be identified by the sizes that appear in output. Padme reveals small file sizes exactly and for each output size there is only a strict range of possible input sizes.
 
 The deterministic approach may seem better if an adversary can somehow request the file to be encrypted many times to collect data on variation of size knowing that the target is always the same. For most practical uses, randomness is a better choice.
 
-![Output size distribution](https://github.com/covert-encryption/covert/raw/main/docs/distribution.png)
+![Output size distribution](https://github.com/covert-encryption/covert/raw/main/docs/distribution.webp)
 If only specific known sizes are produced, it may be possible to identify which scheme was used. The output file sizes should be distributed such that any byte size is likely to occur. Padme produces only a set of very distinct sizes, so if an adversary were to discover a set of files containing *only* such sizes, or even just one larger file that happens to be exactly on one of the padme sizes, he can reasonably assert that it is in fact padme-padded encrypted data. Covert maintains confidentiality and deniability by producing output file sizes that reveal very little of either the content or the packaging.
 
 The amount of padding, along with the fixed size level, may be adjusted by the `--pad` parameter on covert CLI to cater for different security and space usage trade offs.
