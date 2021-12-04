@@ -34,45 +34,55 @@ def encrypt_header(auth):
   return header, nonce, key
 
 
-def decrypt_header(ciphertext, auth):
-  if len(ciphertext) < 32:  # 12 nonce + 1 data + 3 nextlen + 16 tag
-    raise ValueError("This file is too small to contain encrypted data.")
-  nonce = util.noncegen(ciphertext[:12])
-  n = next(nonce)
-  # Try wide-open
-  key = bytes(32)
-  with suppress(CryptoError):
-    return *find_header_hend(ciphertext, n, key, 12), nonce
-  # Try all auth methods
-  eph = pubkey.Key(pkhash=ciphertext[:32])
-  for a in auth:
-    if isinstance(a, pubkey.Key):
-      key = pubkey.derive_symkey(n, a, eph)
+class Header:
+  def __init__(self, ciphertext):
+    if len(ciphertext) < 32:  # 12 nonce + 1 data + 3 nextlen + 16 tag
+      raise ValueError("This file is too small to contain encrypted data.")
+    self.ciphertext = bytes(ciphertext[:1024])
+    self.nonce = self.ciphertext[:12]
+    self.eph = pubkey.Key(pkhash=self.ciphertext[:32])
+    self.slot = "locked"
+    self.key = None
+    self.block0pos = None
+    self.block0len = None
+    with suppress(CryptoError):
+      # Try wide-open
+      self._find_block0(bytes(32), 12)
+      self.slot = "wide-open"
+
+  def try_key(self, recvkey):
+    self._find_slots(pubkey.derive_symkey(self.nonce, recvkey, self.eph))
+
+  def try_pass(self, pwhash):
+    authkey = passphrase.authkey(pwhash, self.nonce)
+    try:
+      self._find_block0(authkey, 12)
+      self.slot = "passphrase"
+    except CryptoError:
+      self._find_slots(authkey)
+
+  def _find_slots(self, authkey):
+    # The first slot is all zeroes (not stored in file), followed by auth1, auth2, ...
+    ct = self.ciphertext
+    slots = [bytes(32)] + [ct[i * 32:(i+1) * 32] for i in range(1, 19) if (i+1) * 32 <= len(ct) - 19]
+    slotends = [(i+1) * 32 for i in range(len(slots))]
+    for i, s in enumerate(slots):
+      key = util.xor(s, authkey)
+      for hbegin in slotends[i:]:
+        with suppress(CryptoError):
+          self._find_block0(key, hbegin)
+          self.slot = i, self.block0pos // 32
+          return
+    raise CryptoError
+
+  def _find_block0(self, key, begin):
+    ct = self.ciphertext
+    for end in reversed(range(begin + 19, 1 + min(1024, len(ct)))):
+      with suppress(CryptoError):
+        self.block0 = chacha.decrypt(ct[begin:end], ct[:begin], self.nonce, key)
+        break
     else:
-      key = passphrase.authkey(a, n)
-      # Single password
-      with suppress(CryptoError):
-        return *find_header_hend(ciphertext, n, key, 12), nonce
-    # Multiple auth (pubkey or password)
-    with suppress(CryptoError):
-      return *find_header_slots(ciphertext, n, key), nonce
-  raise ValueError("Unable to decrypt.")
-
-
-def find_header_slots(ct, n, key):
-  slots = [bytes(32)] + [ct[i * 32:(i+1) * 32] for i in range(1, 19) if (i+1) * 32 <= len(ct) - 19]
-  slotends = [(i+1) * 32 for i in range(len(slots))]
-  for i, s in enumerate(slots):
-    k = util.xor(s, key)
-    for hbegin in slotends[i:]:
-      with suppress(CryptoError):
-        return find_header_hend(ct, n, k, hbegin)
-  raise CryptoError
-
-
-def find_header_hend(ct, n, key, hbegin):
-  for hend in reversed(range(hbegin + 19, 1 + min(1024, len(ct)))):
-    with suppress(CryptoError):
-      data = chacha.decrypt(bytes(ct[hbegin:hend]), bytes(ct[:hbegin]), n, key)
-      return data, hend, key
-  raise CryptoError
+      raise CryptoError
+    self.key = key
+    self.block0pos = begin
+    self.block0len = end - begin - 19
