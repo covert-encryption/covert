@@ -48,7 +48,8 @@ class BlockStream:
 
   def decrypt_init(self, f):
     self.pos = 0
-    if isinstance(f, mmap.mmap):
+    if hasattr(f, "__len__"):
+      # f can be an entire file in a buffer, or mmapped file
       self.ciphertext = memoryview(f)  # Prevent data copying on [:] operations.
       self.file = None
       self.end = len(self.ciphertext)
@@ -86,7 +87,7 @@ class BlockStream:
         size = extlen
     else:
       # MMAP is super easy
-      size = min(extlen, len(self.ciphertext) - pos)
+      size = min(extlen, len(self.ciphertext) - self.pos)
     return size
 
   def decrypt_blocks(self):
