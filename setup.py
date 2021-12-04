@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 setup(
   name="covert",
   author="Covert Encryption",
-  author_email="covert-encryption@github",
+  author_email="covert-encryption@users.noreply.github.com",
   description="File and message encryption GUI and CLI",
   long_description=open("README.md").read(),
   long_description_content_type="text/markdown",
