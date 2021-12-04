@@ -182,4 +182,3 @@ class PWValidator(QValidator):
     self.pwinput.emoji.face(quality)
     return QValidator.Acceptable if valid else QValidator.Intermediate
 
-

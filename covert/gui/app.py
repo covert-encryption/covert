@@ -1,6 +1,8 @@
 import os
 import sys
+from contextlib import suppress
 from io import BytesIO
+from itertools import chain
 
 from PySide6.QtCore import QRect, QSize, Qt, Slot
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel
@@ -8,11 +10,11 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QGridLayout, QHBoxLayou
 
 from covert import passphrase, pubkey, util
 from covert.archive import Archive
-from covert.blockstream import decrypt_file, encrypt_file
+from covert.blockstream import BlockStream, encrypt_file
 from covert.cli import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 from covert.gui.encrypt import AuthInput
 from covert.gui.util import datafile, setup_interrupt_handling
-from covert.gui.widgets import EncryptToolbar, MethodsWidget
+from covert.gui.widgets import DecryptWidget, EncryptToolbar, MethodsWidget
 
 
 class App(QApplication):
@@ -82,6 +84,8 @@ class MainWindow(QWidget):
     self.logo.setGeometry(QRect(0, 0, 128, 128))
     self.logo.setPixmap(app.logo)
     self.auth = AuthInput(app)
+    self.decrauth = AuthDecr(app)
+    self.decrauth.setVisible(False)
     self.methods = MethodsWidget(app)
     self.plaintext = QPlainTextEdit()
     self.plaintext.setTabChangesFocus(True)
@@ -112,6 +116,7 @@ class MainWindow(QWidget):
     self.layout.addWidget(self.openbutton, 0, 5)
     self.layout.addItem(QSpacerItem(0, 11), 1, 2, 1, 4)
     self.layout.addWidget(self.auth, 2, 2, 1, 4)
+    self.layout.addWidget(self.decrauth, 2, 2, 1, 4)
     self.layout.addItem(QSpacerItem(0, 11), 3, 2, 1, 4)
     self.layout.addWidget(self.methods, 4, 0, 1, -1)
     self.layout.addWidget(self.plaintext, 5, 0, 1, -1)
@@ -138,6 +143,12 @@ class MainWindow(QWidget):
       item = QStandardItem(icon, a.split('/')[-1])
       self.attmodel.appendRow(item)
 
+
+  def update_decryption_views(self):
+    self.methods.deleteLater()
+    self.methods = DecryptWidget(self.app)
+    self.layout.addWidget(self.methods, 4, 0, 1, -1)
+
   @Slot()
   def encrypt_new(self):
     self.auth.setVisible(True)
@@ -149,44 +160,50 @@ class MainWindow(QWidget):
   @Slot()
   def decrypt_paste(self):
     data = util.armor_decode(QGuiApplication.clipboard().text())
-    with BytesIO(data) as f:
-      del data
-      self.decrypt(f)
+    self.decrypt(data)
 
   @Slot()
   def decrypt_file(self):
     file = QFileDialog.getOpenFileName(self, "Covert - Open file", "", "Covert Binary or Armored (*)")[0]
     if not file:
       return
-    if 40 <= os.path.getsize(file) <= ARMOR_MAX_SIZE:
-      # Try reading the file as armored text rather than binary
-      with open(file, "rb") as f:
-        data = f.read()
-      try:
-        f = BytesIO(util.armor_decode(data.decode()))
-      except ValueError:
-        f = BytesIO(data)
-      del data
-      with f:
-        self.decrypt(f)
-      return
-    # Process as binary
+    # TODO: Implement in a thread using mmap instead
     with open(file, "rb") as f:
-      with suppress(OSError):
-        f = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-      with f:
-        self.decrypt(f)
+      data = f.read()
+    if 40 <= len(data) <= ARMOR_MAX_SIZE:
+      # Try reading the file as armored text rather than binary
+      with suppress(ValueError):
+        data = util.armor_decode(data.decode())
+    self.decrypt(data)
 
   def decrypt(self, infile):
     self.auth.setVisible(False)
     self.plaintext.clear()
     a = Archive()
     f = None
-    def authgen():
-      # FIXME: Should wait for GUI input of auth methods instead
-      yield from self.app.identities
-      yield from self.app.passwords
-    for data in a.decode(decrypt_file(authgen(), infile, a)):
+    b = BlockStream()
+    b.decrypt_init(infile)
+    # Try decrypting with everything the user has entered
+    for a in chain(self.app.identities, self.app.signatures, self.app.passwords):
+      if b.header.key:
+        break
+      with suppress(CryptoError):
+        b.authenticate(a)
+    self.app.blockstream = b
+    self.decrypt_attempt()
+
+  def decrypt_attempt(self):
+    b = self.app.blockstream
+    self.update_decryption_views()
+    if not b.header.key:
+      self.decrauth.note.setText(f"Unable to decrypt. Enter passphrase or key.")
+      self.decrauth.setVisible(True)
+      return
+    self.decrauth.setVisible(False)
+    s = b.header.slot
+    a = Archive()
+    f = None
+    for data in a.decode(b.decrypt_blocks()):
       if isinstance(data, dict):
         # Index
         pass
@@ -215,3 +232,94 @@ class MainWindow(QWidget):
       else:
         if f:
           f.write(data)
+
+
+class AuthDecr(QWidget):
+
+  def __init__(self, app):
+
+    QWidget.__init__(self)
+    self.setMinimumWidth(535)
+    self.app = app
+    self.init_keyinput()
+    self.init_passwordinput()
+    self.layout = QGridLayout(self)
+    self.layout.setContentsMargins(11, 11, 11, 11)
+    self.layout.addWidget(QLabel("Secret key:"), 0, 0)
+    self.layout.addWidget(self.siginput, 0, 1)
+    self.layout.addWidget(self.skfile, 0, 4)
+    self.layout.addWidget(QLabel("Passphrase:"), 1, 0)
+    self.layout.addWidget(self.pw, 1, 1, 1, 2)
+    self.layout.addWidget(self.addbutton, 1, 4)
+    self.layout.addWidget(self.note, 2, 0, 1, 4)
+
+
+
+  def init_passwordinput(self):
+    self.pw = QLineEdit()
+    self.addbutton = QPushButton("Decrypt")
+    self.addbutton.clicked.connect(self.addpassword)
+    QShortcut(QKeySequence("Return"), self.pw, context=Qt.WidgetShortcut).activated.connect(self.addpassword)
+    QShortcut(QKeySequence("Tab"), self.pw, context=Qt.WidgetShortcut).activated.connect(self.tabcomplete)
+    QShortcut(QKeySequence("Ctrl+H"), self.pw, context=Qt.WidgetShortcut).activated.connect(self.togglehide)
+    self.pw.setEchoMode(QLineEdit.EchoMode.Password)
+    self.note = QLabel('Passphrase:')
+    self.visible = False
+
+  def init_keyinput(self):
+    self.siginput = QLineEdit()
+    self.siginput.setDisabled(True)
+    self.siginput.setReadOnly(True)
+    self.siginput.setFixedWidth(260)
+    self.skfile = QPushButton('Open keyfile')
+    self.skfile.clicked.connect(self.loadsk)
+
+  @Slot()
+  def togglehide(self):
+    self.visible = not self.visible
+    self.pw.setEchoMode(QLineEdit.EchoMode.Normal if self.visible else QLineEdit.EchoMode.Password)
+
+  @Slot()
+  def addpassword(self):
+    pw = self.pw.text()
+    try:
+      pwhash = passphrase.pwhash(util.encode(pw))
+    except ValueError:
+      return
+    self.app.passwords.add(pwhash)
+    self.pw.setText("")
+    self.app.update_encryption_views()
+    try:
+      self.app.blockstream.authenticate(pwhash)
+    except Exception as e:
+      self.note.setText(f"Error: {e}")
+      return
+    self.app.window.decrypt_attempt()
+
+  @Slot()
+  def tabcomplete(self):
+    pw, pos, hint = passphrase.autocomplete(self.pw.text(), self.pw.cursorPosition())
+    self.pw.setText(pw)
+    self.pw.setCursorPosition(pos)
+    if hint:
+      self.note.setText('Autocomplete: ' + hint)
+
+
+  @Slot()
+  def loadsk(self):
+    file = QFileDialog.getOpenFileName(self, "Covert - Open secret key", "",
+      "SSH, Minisign and Age private keys (*)")[0]
+    if not file:
+      return
+    keys = set(pubkey.read_sk_file(file))
+    self.app.identities |= keys
+    self.app.update_encryption_views()
+    for i, k in enumerate(keys):
+      try:
+        self.app.blockstream.authenticate(k)
+      except Exception as e:
+        if i < len(keys) - 1:
+          continue
+        self.decrauth.note.setText(f"Error: {e}")
+        return
+    self.app.window.decrypt_attempt()
