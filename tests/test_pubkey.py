@@ -87,11 +87,10 @@ def test_signing():
 
 def test_signature_high_level():
   for i in range(100):
-    presk = token_bytes(32)
-    pk, sk = sodium.crypto_box_seed_keypair(presk)
-    sk = sk[:32]
+    key = pubkey.Key()
+    pub = pubkey.Key(edpk=key.edpk)
     blkhash = token_bytes(64)
     # Sign & verify
-    signature = sign.signature(presk, blkhash)
-    msg = sign.verify(pk, blkhash, signature)
+    signature = sign.signature(key, blkhash)
+    msg = sign.verify(pub, blkhash, signature)
     assert msg == blkhash
