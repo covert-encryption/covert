@@ -2,101 +2,158 @@ import collections
 import mmap
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from hashlib import sha512
 from sys import stderr
 
 from nacl.exceptions import CryptoError
 
 from covert import chacha, pubkey, sign
-from covert.cryptoheader import decrypt_header, encrypt_header
+from covert.cryptoheader import Header, encrypt_header
 from covert.util import noncegen
 
-BS = (1 << 20) - 19  # The maximum block size to use (only affects encryption)
+BS = (1 << 20) - 19  # The maximum block size to use
 
-
-def decrypt_file(auth, f, a):
-
-  def add_to_queue(p, blklen, nblk):
-    nonlocal pos
-    pos, end = p, p + blklen
-    fut = executor.submit(chacha.decrypt, ciphertext[pos:end], None, nblk, key)
-    q.append((fut, nblk, pos, blklen))
-    pos = end
-
-  workers = 8
-  mmapped = isinstance(f, mmap.mmap)
-  if mmapped:
-    ciphertext = memoryview(f)  # Prevent data copying on [:] operations.
-    filelen = len(ciphertext)
-  else:
-    # Large enough to hold a maximum size block per each worker
-    ciphertext = memoryview(bytearray((0xFFFFFF+19) * workers))
-    filelen = f.readinto(ciphertext[:1024])
-  block, pos, key, nonce = decrypt_header(ciphertext[:min(filelen, 1024)], auth)
-  filepos = pos
-  blkhash = sha512(ciphertext[pos - 16:pos]).digest()
-  executor = ThreadPoolExecutor(max_workers=workers)
-  q = collections.deque()
-  nextlen = int.from_bytes(block[-3:], "little") + 19
-  yield memoryview(block)[:-3]
-  while nextlen > 19:
-    # Stream blocks into worker threads
-    while len(q) < workers:
-      # Guessing block length based on the nextlen which may be from a few blocks behind
-      if mmapped:
-        blklen = min(nextlen, len(ciphertext) - pos)
-      else:
-        # Restart from the beginning of the buffer if the end would be reached
-        if pos + nextlen > len(ciphertext):
-          pos = 0
-        blklen = f.readinto(ciphertext[pos:pos + nextlen])
-      if not blklen:
+def decrypt_file(auth, f, archive):
+  b = BlockStream()
+  b.decrypt_init(f)
+  if not b.header.key:
+    for a in auth:
+      with suppress(CryptoError):
+        b.authenticate(a)
         break
-      add_to_queue(pos, blklen, next(nonce))
-    # Wait for results, and retry if blklen was misguessed
-    while q:
-      fut, nblk, p, blklen = q.popleft()
-      try:
-        block = memoryview(fut.result())
-        nextlen = int.from_bytes(block[-3:], "little") + 19
-        blkhash = sha512(blkhash + ciphertext[p + blklen - 16:p + blklen]).digest()
-        filepos += len(block) + 16
-        yield block[:-3]
-        if len(q) < workers:
-          break
-      except CryptoError:
-        # Reset the queue and try again at failing pos with new nextlen if available
-        for qq in q:
-          qq[0].cancel()
-        if blklen == nextlen:
-          raise CryptoError(f"Failed to decrypt next block at [{p}:{p + blklen}]") from None
-        q.clear()
-        nonce = noncegen(nblk)
-        add_to_queue(p, nextlen, nblk)
+  yield from b.decrypt_blocks()
+  b.verify_signatures(archive)
 
-  a.filehash = blkhash
-  a.signatures = []
-  # Signature verification
-  if a.index.get('s'):
-    signatures = [pubkey.Key(edpk=k) for k in a.index['s']]
-    for key in signatures:
-      if mmapped:
-        sigblock = ciphertext[filepos:filepos + 80]
+class BlockStream:
+  def __init__(self):
+    self.key = None
+    self.nonce = None
+    self.workers = 8
+    self.executor = ThreadPoolExecutor(max_workers=self.workers)
+    self.block = None
+    self.blkhash = None
+    self.ciphertext = None
+    self.filepos = 0
+    self.filelen = 0
+    self.q = collections.deque()
+    self.pos = 0  # Current position within ciphertext (buffer)
+
+  def authenticate(self, anykey):
+    """Attempt decryption using secret key or password hash"""
+    if isinstance(anykey, pubkey.Key):
+      self.header.try_key(anykey)
+    else:
+      self.header.try_pass(anykey)
+
+  def decrypt_init(self, f):
+    self.pos = 0
+    if isinstance(f, mmap.mmap):
+      self.ciphertext = memoryview(f)  # Prevent data copying on [:] operations.
+      self.file = None
+      self.end = len(self.ciphertext)
+    else:
+      # Large enough to hold a maximum size block per each worker
+      self.ciphertext = memoryview(bytearray((0xFFFFFF+19) * self.workers))
+      self.file = f
+      self.end = 0
+    size = self._read(1024)
+    self.header = Header(self.ciphertext[:size])
+
+  def _add_to_queue(self, p, extlen, aad=None):
+    pos, end = p, p + extlen
+    #assert isinstance(nblk, bytes) and len(nblk) == 12
+    #assert isinstance(self.key, bytes) and len(self.key) == 32
+    nblk = next(self.nonce)
+    fut = self.executor.submit(chacha.decrypt, self.ciphertext[pos:end], aad, nblk, self.key)
+    self.q.append((fut, nblk, pos, extlen))
+    return end
+
+  def _read(self, extlen):
+    """Try to get at least extlen bytes after current pos cursor. Returns the number of bytes available."""
+    if self.file:
+      # Restart from the beginning of the buffer if the end would be reached
+      if self.end + extlen > len(self.ciphertext):
+        leftover = self.ciphertext[self.pos:self.end]
+        self.ciphertext[:len(leftover)] = leftover
+        self.pos = 0
+        self.end = len(leftover)
+      # Do we need to read anything?
+      if self.end - self.pos < extlen:
+        self.end += self.file.readinto(self.ciphertext[self.end:self.pos + extlen])
+        size = self.end - self.pos
       else:
-        sigblock = ciphertext[filepos:filepos + 80]
-        filepos += 80
-      nsig = sha512(blkhash + key.pk).digest()[:12]
-      ksig = blkhash[:32]
-      try:
-        signature = chacha.decrypt(sigblock, None, nsig, ksig)
-      except CryptoError:
-        a.signatures.append((False, key, 'Signature corrupted or data manipulated'))
-        continue
-      try:
-        sign.verify(key, blkhash, signature)
-        a.signatures.append((True, key, 'Signature verified'))
-      except CryptoError:
-        a.signatures.append((False, key, 'Forged signature'))
+        size = extlen
+    else:
+      # MMAP is super easy
+      size = min(extlen, len(self.ciphertext) - pos)
+    return size
+
+  def decrypt_blocks(self):
+    if not self.header.key:
+      raise ValueError("Not authenticated")
+    self.key = self.header.key
+    self.nonce = noncegen(self.header.nonce)
+    self.blkhash = b""
+    self.pos = self.header.block0pos
+    header = bytes(self.ciphertext[:self.header.block0pos])
+    self.pos = self._add_to_queue(self.pos, self.header.block0len + 19, aad=header)
+    nextlen = BS
+    while nextlen:
+      # Stream blocks into worker threads
+      while len(self.q) < self.workers:
+        # Guessing block length based on the nextlen which may be from a few blocks behind
+        extlen = self._read(nextlen + 19)
+        if extlen:
+          self.pos = self._add_to_queue(self.pos, extlen)
+        if extlen < 1024:
+          break # EOF or need a longer block before queuing any more
+      # Wait for results, and retry if blklen was misguessed
+      while self.q:
+        fut, nblk, p, elen = self.q.popleft()
+        try:
+          block = memoryview(fut.result())
+          nextlen = int.from_bytes(block[-3:], "little")
+          self.blkhash = sha512(self.blkhash + self.ciphertext[p + elen - 16:p + elen]).digest()
+          self.filepos += len(block) + 16
+          yield block[:-3]
+          if len(self.q) < self.workers:
+            break
+        except CryptoError:
+          # Reset the queue and try again at failing pos with new nextlen if available
+          for qq in self.q:
+            qq[0].cancel()
+          self.q.clear()
+          extlen = nextlen + 19
+          if elen == extlen:
+            raise CryptoError(f"Failed to decrypt block {self.key.hex()} {nblk.hex()} at ({self.ciphertext[p:p+extlen].hex()})[{p}:{p + extlen}]") from None
+          self.nonce = noncegen(nblk)
+          pos = self._add_to_queue(p, extlen)
+
+  def verify_signatures(self, a):
+    a.filehash = self.blkhash
+    a.signatures = []
+    # Signature verification
+    if a.index.get('s'):
+      signatures = [pubkey.Key(edpk=k) for k in a.index['s']]
+      for key in signatures:
+        if mmapped:
+          sigblock = ciphertext[filepos:filepos + 80]
+        else:
+          sigblock = ciphertext[filepos:filepos + 80]
+          filepos += 80
+        nsig = sha512(blkhash + key.pk).digest()[:12]
+        ksig = blkhash[:32]
+        try:
+          signature = chacha.decrypt(sigblock, None, nsig, ksig)
+        except CryptoError:
+          a.signatures.append((False, key, 'Signature corrupted or data manipulated'))
+          continue
+        try:
+          sign.verify(key, blkhash, signature)
+          a.signatures.append((True, key, 'Signature verified'))
+        except CryptoError:
+          a.signatures.append((False, key, 'Forged signature'))
 
 
 class Block:
