@@ -10,7 +10,7 @@ def test_armor_valid():
   for i in [10000, 9999, 9998, 9000, 5000] + list(range(100)):
     d = data[i:]
     text = armor_encode(d)
-    binary = armor_decode('\n\n     ```\n' + text.replace('\n', '   \r\n\t  ') + '```\n\n')
+    binary = armor_decode('\n\n    >>> ```\n' + text.replace('\n', '   \r\n\t>>>  ') + '>>> ```\n>>>\n')
     assert binary == d
 
 
