@@ -16,10 +16,10 @@ Other encryption tools add unencrypted headers revealing the recipients and othe
 
 A message (base64 or binary) has no headers or anything else that could be recognized:
 ```
-HDGKMFEo5cYHtUF1w9aNlX1lMmWJD3B7p8HoBoQZTNJGjg/nUOMqlXLspmmVO7PQj8Pe
+R/i7oqt9QnTnc6Op9gw9wSbYQq1bfYtKAfEOxpiQopc0SsYdLa12AUkg0o5s4KPfU6eZX59c4SXD2F8efFCEUeU
 ```
 
-Covert generates easy passphrases like `pinkmuletibetdemand` for the above. The encoded message includes random padding to hide the length of the message and it is still shorter than others. For comparison, `gpg` needs six lines instead of one and still ends up revealing the exact length of the message.
+Covert generates easy passphrases like `oliveanglepeaceethics` for the above. The encoded message includes random padding to hide the length of the message and it is still shorter than others. For comparison, `gpg` needs six lines instead of one and still ends up revealing the exact length of the message.
 
 ## Try it!
 
