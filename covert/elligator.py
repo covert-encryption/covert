@@ -42,10 +42,12 @@ class fe:
   def invert(self):
     return fe(pow(self.val, self.p - 2, self.p))
 
-  def __eq__(self, other: fe):
+  def __eq__(self, other):
+    if not isinstance(other, fe): return NotImplemented
     return self.val % self.p == other.val % self.p
 
-  def __ne__(self, other: fe):
+  def __ne__(self, other):
+    if not isinstance(other, fe): return NotImplemented
     return self.val % self.p != other.val % self.p
 
   def is_positive(self):
@@ -168,7 +170,7 @@ def fast_hash_to_curve(r: fe) -> Tuple[fe, fe]:
 # never happens in practice, because (i) a random point in the curve has
 # a negligible chance of being zero, and (ii) scalar multiplication with
 # a trimmed scalar *never* yields zero.
-def fast_curve_to_hash(u: fe, v_is_negative: fe) -> fe:
+def fast_curve_to_hash(u: fe, v_is_negative: bool) -> fe:
   """Convert a curve point into a pseudorandom 254 bit value"""
   t = u + A
   r = -non_square * u * t

@@ -33,7 +33,7 @@ def test_encode_message(text, expected):
 
 def test_encode_file():
   a = Archive()
-  a.file_index(["data/foo.txt"])
+  a.file_index(["tests/data/foo.txt"])
   block = Block()
   a.encode(block)
   written = bytes(block.data[:block.pos])
@@ -44,7 +44,7 @@ def test_encode_file():
 
 def test_encode_files():
   a = Archive()
-  a.file_index(2 * ["data/foo.txt"])
+  a.file_index(2 * ["tests/data/foo.txt"])
   assert a.padding == 0
   block = Block()
   a.encode(block)

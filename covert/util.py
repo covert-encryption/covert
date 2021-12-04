@@ -41,12 +41,12 @@ def armor_decode(data: str) -> bytes:
 
 def armor_encode(data: bytes) -> str:
   """Base64 without the padding nonsense, and with adaptive line wrapping."""
-  data = b64encode(data).decode().rstrip('=')
-  if len(data) > ARMOR_MAX_SINGLELINE:
+  d = b64encode(data).decode().rstrip('=')
+  if len(d) > ARMOR_MAX_SINGLELINE:
     # Make fingerprinting the encoding by line lengths a bit harder while still using >76
     splitlen = choice(range(76, 121, 4))
-    data = '\n'.join([data[i:i + splitlen] for i in range(0, len(data), splitlen)])
-  return data
+    d = '\n'.join([d[i:i + splitlen] for i in range(0, len(d), splitlen)])
+  return d
 
 
 def encode(s: str) -> bytes:

@@ -35,8 +35,8 @@ def test_age_key_decoding_and_encoding():
 
 
 def test_ssh_key_decoding():
-  pk, = pubkey.read_pk_file("keys/ssh_ed25519.pub")
-  sk, = pubkey.read_sk_file("keys/ssh_ed25519")
+  pk, = pubkey.read_pk_file("tests/keys/ssh_ed25519.pub")
+  sk, = pubkey.read_sk_file("tests/keys/ssh_ed25519")
   assert pk.comment == "test-key@covert"
   assert pk == sk
 
