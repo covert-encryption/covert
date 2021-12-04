@@ -161,9 +161,9 @@ The salt is always `covertpassphrase` (16 bytes)
 |---|---|
 |hash_len|32|
 |time_cost|2|
-|mem_cost||256 MiB|
-|parallelism||1|
-|type||Argon2id|
+|mem_cost|256 MiB|
+|parallelism|1|
+|type|Argon2id|
 
 Notice that in this stage the roles of salt and password are reversed because libsodium requires a salt of exactly 16 bytes, matching the pwhash but not the 12-byte nonce.
 
