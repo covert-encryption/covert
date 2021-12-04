@@ -4,10 +4,11 @@ from time import sleep
 
 import pytest
 
+from covert.archive import Archive
 from covert.blockstream import BS, decrypt_file, encrypt_file
 
-AUTH = False, ['justsomepassword'], [], []
-AUTH_DEC = ['justsomepassword'], []
+AUTH = False, [b'justfakepasshash'], [], []
+AUTH_DEC = [b'justfakepasshash']
 
 
 @pytest.mark.parametrize(
@@ -28,7 +29,8 @@ def test_consume_varying_block_sizes(datasizes, ciphersizes):
     except StopIteration:
       pass
 
-  e = encrypt_file(AUTH, blockinput)
+  a = Archive()
+  e = encrypt_file(AUTH, blockinput, a)
   num = iter(datasizes)
   for cipherblock, expected_length in zip(e, ciphersizes):
     assert len(cipherblock) == expected_length
@@ -78,7 +80,8 @@ def test_encrypt_decrypt(size):
   plaintext = token_bytes(size)
   inf = BytesIO(plaintext)
   ciphertext = b''
-  for block in encrypt_file(AUTH, blockinput):
+  a = Archive()
+  for block in encrypt_file(AUTH, blockinput, a):
     ciphertext += block
 
   lenplain = len(plaintext)
@@ -87,6 +90,7 @@ def test_encrypt_decrypt(size):
   assert lencipher == calculatedcipher
   f = BytesIO(ciphertext)
   plainout = b''
-  for data in decrypt_file(AUTH_DEC, f):
+  a = Archive()
+  for data in decrypt_file(AUTH_DEC, f, a):
     plainout += data
   assert plainout == plaintext

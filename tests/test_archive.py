@@ -37,8 +37,8 @@ def test_encode_file():
   block = Block()
   a.encode(block)
   written = bytes(block.data[:block.pos])
-  # dict(f=[dict(n="foo.txt", s=4)]) + b'test'
-  assert written == b"\x81\xA1f\x91\x82\xA1n\xA7foo.txt\xA1s\x04test"
+  # {f: [[4, "foo.txt", {}]]} + b'test'
+  assert written == b"\x81\xA1f\x91\x93\x04\xA7foo.txt\x80test"
   assert a.stage is Stage.END
 
 
@@ -49,16 +49,16 @@ def test_encode_files():
   block = Block()
   a.encode(block)
   written = bytes(block.data[:block.pos])
-  # dict(f=[dict(n="foo.txt", s=4), dict(n="foo.txt", s=4)]) + b'testtest'
-  expected = b"\x81\xA1f\x92\x82\xA1n\xA7foo.txt\xA1s\x04\x82\xA1n\xA7foo.txt\xA1s\x04testtest"
+  # {f: [[4, "foo.txt", {}], [4, "foo.txt", {}]]} + b'testtest'
+  expected = b"\x81\xA1f\x92\x93\x04\xA7foo.txt\x80\x93\x04\xA7foo.txt\x80testtest"
   assert written == expected
   assert a.stage is Stage.END
 
 
 @pytest.mark.parametrize(
   "expected_out,archive", [
-  ([dict(f=[dict(s=0)]), True, False], b'\x00'),
-  ([dict(f=[dict(s=4)]), True, b"test", False], b'\x04test'),
+  ([dict(f=[[0, None, {}]]), True, False], b'\x00'),
+  ([dict(f=[[4, None, {}]]), True, b"test", False], b'\x04test'),
   ]
 )
 def test_decode_message(expected_out, archive):
