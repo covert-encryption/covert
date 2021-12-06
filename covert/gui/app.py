@@ -215,7 +215,7 @@ class MainWindow(QWidget):
             f.seek(0)
             data = f.read()
             try:
-              self.plaintext.appendPlainText(f" 💬\n{data.decode()}")
+              self.plaintext.appendPlainText(f"{data.decode()}\n")
             except UnicodeDecodeError:
               pidx = a.flist.index(prev)
               prev.name = f"noname.{pidx + 1:03}"
