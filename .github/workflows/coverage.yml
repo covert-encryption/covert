@@ -1,5 +1,41 @@
-steps:
-  - name: Test & publish code coverage
-    uses: paambaati/codeclimate-action@v3.0.0
-    env:
-      CC_TEST_REPORTER_ID: ${{secrets.CC_TEST_REPORTER_ID}}
+name: Coverage check
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '!*' # Do not execute on tags
+    paths:
+      - covert/*
+      - tests/*
+  pull_request:
+    paths:
+      - '!*.MD'
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        platform: [ubuntu-latest]
+        python-version: [3.9]
+      fail-fast: false
+
+    name: test python ${{ matrix.python-version }}/${{ matrix.platform }}
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies 🔨
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+
+      - uses: paambaati/codeclimate-action@v3
+        env:
+          CC_TEST_REPORTER_ID: ${{secrets.CC_TEST_REPORTER_ID}}
+        with:
+          coverageCommand: tox -e coverage
