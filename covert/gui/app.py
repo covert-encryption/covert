@@ -222,8 +222,8 @@ class MainWindow(QWidget):
               prev.renamed = True
           f.close()
           f = None
-        if prev and prev.name is not None:
-          r = '<renamed>' if prev.renamed else ''
+        #if prev and prev.name is not None:
+          #r = '<renamed>' if prev.renamed else ''
           #self.plaintext.appendPlainText(f'{prev.size:15,d} 📄 {prev.name:60}{r}'.rstrip())
         if a.curfile:
           # Is it a displayable message?
