@@ -215,16 +215,16 @@ class MainWindow(QWidget):
             f.seek(0)
             data = f.read()
             try:
-              self.plaintext.appendPlainText(f" 💬\n{data.decode()}")
+              self.plaintext.appendPlainText(f"{data.decode()}\n")
             except UnicodeDecodeError:
               pidx = a.flist.index(prev)
               prev.name = f"noname.{pidx + 1:03}"
               prev.renamed = True
           f.close()
           f = None
-        if prev and prev.name is not None:
-          r = '<renamed>' if prev.renamed else ''
-          self.plaintext.appendPlainText(f'{prev.size:15,d} 📄 {prev.name:60}{r}'.rstrip())
+        #if prev and prev.name is not None:
+          #r = '<renamed>' if prev.renamed else ''
+          #self.plaintext.appendPlainText(f'{prev.size:15,d} 📄 {prev.name:60}{r}'.rstrip())
         if a.curfile:
           # Is it a displayable message?
           if a.curfile.name is None and a.curfile.size is not None and a.curfile.size < TTY_MAX_SIZE:
