@@ -224,7 +224,7 @@ class MainWindow(QWidget):
           f = None
         if prev and prev.name is not None:
           r = '<renamed>' if prev.renamed else ''
-          self.plaintext.appendPlainText(f'{prev.size:15,d} 📄 {prev.name:60}{r}'.rstrip())
+          #self.plaintext.appendPlainText(f'{prev.size:15,d} 📄 {prev.name:60}{r}'.rstrip())
         if a.curfile:
           # Is it a displayable message?
           if a.curfile.name is None and a.curfile.size is not None and a.curfile.size < TTY_MAX_SIZE:
