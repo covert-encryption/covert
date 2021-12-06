@@ -6,11 +6,10 @@ on:
     tags:
       - '!*' # Do not execute on tags
     paths:
-      - covert/*
-      - tests/*
+      - '**.py'
   pull_request:
     paths:
-      - '!*.MD'
+      - '**.py'
 
 jobs:
   test:
