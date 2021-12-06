@@ -99,31 +99,22 @@ def argparse():
     sys.exit(0)
   ad = {}
   args = Args()
-  aiter = iter(av[1:])
+  # Separate mode selector from other arguments
+  if av[0].startswith("-") and len(av[0]) > 2:
+    av.insert(1, f'-{av[0][2:]}')
+    av[0] = av[0][:2]
   # Support a few other forms for Age etc. compatibility (but only as the first arg)
-  if av[0].lower() in ('enc', 'encrypt', '-e', '--encrypt'):
+  if av[0].lower() in ('enc', 'encrypt', '-e', '--encrypt') or av[0].startswith('-e'):
     args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
-  elif av[0].lower() in ('dec', 'decrypt', '-d', '--decrypt'):
+  elif av[0].lower() in ('dec', 'decrypt', '-d', '--decrypt') or av[0].startswith('-d'):
     args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
   elif av[0].lower() in ('bench', 'benchmark'):
     args.mode, ad, modehelp = 'benchmark', benchargs, f"{hdrhelp}"
-  elif next((k for k, v in encargs.items() if av[0] in v), None) is not None:
-    args.mode, ad, modehelp = 'enc', encargs, enchelp
-    av.insert(0, None)
-  elif av[0].startswith('-'):
-    if av[0][:2] == '-e':
-      args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
-    elif av[0][:2] == '-d':
-      args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
-    else:
-      stderr.write(' 💣  Invalid or missing command (enc/dec/benchmark).\n')
-      sys.exit(1)
-    av[0] = f'-{av[0][2:]}'
-    aiter = iter(av)
   else:
     stderr.write(' 💣  Invalid or missing command (enc/dec/benchmark).\n')
     sys.exit(1)
-
+  
+  aiter = iter(av[1:])
   longargs = [flag[1:] for switches in ad.values() for flag in switches if flag.startswith("--")]
   shortargs = [flag[1:] for switches in ad.values() for flag in switches if not flag.startswith("--")]
   for a in aiter:
