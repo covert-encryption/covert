@@ -4,6 +4,22 @@ from sys import stderr, stdout
 import colorama
 import covert
 from covert.cli import main_benchmark, main_dec, main_enc
+import mmap
+import os
+import sys
+import itertools
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
+from io import BytesIO
+from pathlib import Path
+from time import perf_counter
+
+import pyperclip
+from tqdm import tqdm
+
+from covert import lazyexec, passphrase, pubkey, tty, util
+from covert.archive import Archive
+from covert.blockstream import decrypt_file, encrypt_file
 
 hdrhelp = """\
 Usage:
@@ -161,11 +177,13 @@ def argparse():
 
   return args
 
+argparse()
 
 def main():
   colorama.init()
   # CLI argument processing
   args = argparse()
+  print(args.askpass)
   if len(args.outfile) > 1:
     raise ValueError('Only one output file may be specified')
   args.outfile = args.outfile[0] if args.outfile else None
@@ -198,7 +216,3 @@ def main():
     stderr.write('I/O error (broken pipe)\n')
   except KeyboardInterrupt:
     stderr.write("Interrupted.\n")
-
-
-if __name__ == "__main__":
-  sys.exit(main() or 0)
