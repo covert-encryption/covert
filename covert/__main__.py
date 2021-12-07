@@ -104,11 +104,11 @@ def argparse():
     av.insert(1, f'-{av[0][2:]}')
     av[0] = av[0][:2]
   # Support a few other forms for Age etc. compatibility (but only as the first arg)
-  if av[0].lower() in ('enc', 'encrypt', '-e', '--encrypt') or av[0].startswith('-e'):
+  if av[0] in ('enc', 'encrypt', '-e'):
     args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
-  elif av[0].lower() in ('dec', 'decrypt', '-d', '--decrypt') or av[0].startswith('-d'):
+  elif av[0] in ('dec', 'decrypt', '-d'):
     args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
-  elif av[0].lower() in ('bench', 'benchmark'):
+  elif av[0] in ('bench', 'benchmark'):
     args.mode, ad, modehelp = 'benchmark', benchargs, f"{hdrhelp}"
   else:
     stderr.write(' 💣  Invalid or missing command (enc/dec/benchmark).\n')
