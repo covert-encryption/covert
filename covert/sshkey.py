@@ -23,7 +23,7 @@ def decode_armor(data: str) -> bytes:
   return b64decode(data[pos1 + len(HEADER) : pos2])
 
 
-def decode_sk(pem: str) -> List[Key]:
+def decode_sk(pem: str) -> List[pubkey.Key]:
   """Parse PEM or the Base64 binary data within a secret key file."""
   data = decode_armor(pem)
 
@@ -61,6 +61,10 @@ def decode_sk(pem: str) -> List[Key]:
   pubkeys = [read_string() for i in range(numkeys)]
   encrypted = read_string()
 
+  # Quick exit if there is nothing we can use
+  if not any(b"ssh-ed25519" in pk for pk in pubkeys):
+    raise ValueError("No ssh-ed25519 keys found")
+
   # Decrypt if protected
   if cipher == b"none":
     data = encrypted
@@ -86,11 +90,21 @@ def decode_sk(pem: str) -> List[Key]:
   # Read secret keys
   secretkeys = []
   for i, pkstr in enumerate(pubkeys):
-    if pkstr != data[:len(pkstr)]:
-      raise ValueError("SSH secret key mismatch with public keys listed in header")
-    t, pk, sk, comment = read_string(), read_string(), read_string(), read_string()
-    # We only support Ed25519
-    if t == b"ssh-ed25519":
-      secretkeys.append(pubkey.Key(edpk=pk, edsk=sk, comment=comment.decode()))
+    t = read_string().decode()
+    if t == "ssh-ed25519":
+      edpk, edsk, comment = read_string(), read_string(), read_string()
+      secretkeys.append(pubkey.Key(edpk=edpk, edsk=edsk, comment=comment.decode()))
+    elif t == "ecdsa-sha2-nistp256":
+      *params, comment = [read_string() for _ in range(4)]
+    elif t == "ssh-rsa":
+      md, pe, se, coeff, p, q, comment = [read_string() for _ in range(7)]
+    elif t == "ssh-dss":
+      *params, comment = [read_string() for _ in range(6)]
+    else:
+      raise ValueError(f"Unknown SSH key type {t}")
 
   return secretkeys
+
+
+# Implementation note: Apparently OpenSSH never puts more than one key in a file,
+# but the above function follows the spec, allowing for any number of keys.
