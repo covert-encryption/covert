@@ -23,8 +23,9 @@ def decode_armor(data: str) -> bytes:
   return b64decode(data[pos1 + len(HEADER) : pos2])
 
 
-def decode_sk(pem: str) -> List[pubkey.Key]:
+def decode_sk(pem: str, pw=None) -> List[pubkey.Key]:
   """Parse PEM or the Base64 binary data within a secret key file."""
+  # None means try without password, then ask
   data = decode_armor(pem)
 
   def decrypt(message, nonce, key):
@@ -75,10 +76,11 @@ def decode_sk(pem: str) -> List[pubkey.Key]:
     # 16 is a normal value
     if rounds > 1000:
       raise ValueError("SSH secret key KDF rounds too high")
-    password = passphrase.ask("SSH secret key password")[0]
-    if not password:
+    if pw is None:
+      pw = passphrase.ask("SSH secret key password")[0]
+    if not pw:
       raise ValueError("Password required for SSH keyfile")
-    keyiv = bcrypt.kdf(password, salt, 32 + 16, rounds, ignore_few_rounds=True)
+    keyiv = bcrypt.kdf(pw, salt, 32 + 16, rounds, ignore_few_rounds=True)
     data = decrypt(encrypted, keyiv[32:], keyiv[:32])
   else:
     raise ValueError("Unsupported SSH keyfile {cipher=!r} {kdfname=!r}")

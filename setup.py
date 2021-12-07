@@ -30,7 +30,7 @@ setup(
   ],
   extras_require={
     "gui": ["pyside6>=6.2.1"],
-    "test": ["pytest", "pytest-sugar", "coverage", "pytest-cov", "mypy", "bandit"],
+    "test": ["pytest", "pytest-sugar", "pytest-mock", "coverage", "pytest-cov", "mypy", "bandit"],
     "dev": ["tox", "isort", "yapf"]
   },
   include_package_data=True,

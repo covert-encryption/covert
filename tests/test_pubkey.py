@@ -4,6 +4,8 @@ from secrets import token_bytes
 import nacl.bindings as sodium
 
 from covert import pubkey, sign
+import pytest
+
 
 # Test vectors from https://age-encryption.org/v1
 AGE_PK = "age1zvkyg2lqzraa2lnjvqej32nkuu0ues2s82hzrye869xeexvn73equnujwj"
@@ -38,7 +40,20 @@ def test_ssh_key_decoding():
   pk, = pubkey.read_pk_file("tests/keys/ssh_ed25519.pub")
   sk, = pubkey.read_sk_file("tests/keys/ssh_ed25519")
   assert pk.comment == "test-key@covert"
+  assert sk.comment == "test-key@covert"
   assert pk == sk
+
+
+def test_ssh_pw_keyfile(mocker):
+  mocker.patch('covert.passphrase.ask', return_value=(b"password", True))
+  sk, = pubkey.read_sk_file("tests/keys/ssh_ed25519_password")
+  assert sk.comment == "password-key@covert"
+
+
+def test_ssh_wrong_password(mocker):
+  mocker.patch('covert.passphrase.ask', return_value=(b"not this password", True))
+  with pytest.raises(ValueError):
+    sk, = pubkey.read_sk_file("tests/keys/ssh_ed25519_password")
 
 
 def test_key_exchange():
