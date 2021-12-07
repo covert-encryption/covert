@@ -16,6 +16,11 @@ def test_generate():
   pw2 = passphrase.generate()
   assert pw1 != pw2
   assert passphrase.generate(8, "-").count('-') == 7
+  # This should randomly hit the regeneration because of weak password
+  for i in range(10):
+    passphrase.generate(1)
+    passphrase.generate(2)
+    passphrase.generate(3)
 
 
 def test_costfactor():
