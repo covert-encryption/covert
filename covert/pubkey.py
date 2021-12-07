@@ -7,7 +7,7 @@ from urllib.request import urlopen
 
 import nacl.bindings as sodium
 
-from covert import bech, elligator, passphrase, util
+from covert import bech, elligator, passphrase, sshkey, util
 
 
 def derive_symkey(nonce, local, remote):
@@ -90,12 +90,14 @@ class Key:
     """Convert secret keys to public"""
     if self.sk:
       pk_conv = sodium.crypto_scalarmult_base(self.sk)
-      assert not self.pk or self.pk == pk_conv
+      if self.pk and self.pk != pk_conv:
+        raise ValueError("Secret and public key mismatch")
       self.pk = pk_conv
     if self.edsk:
       edsk_hashed = self.sk
       edpk_conv = sodium.crypto_scalarmult_ed25519_base(edsk_hashed)
-      assert not self.edpk or self.edpk == edpk_conv
+      if self.edpk and self.edpk != edpk_conv:
+        raise ValueError("Secret and public key mismatch")
       self.edpk = edpk_conv
 
   def _validate(self):
@@ -139,10 +141,9 @@ def read_pk_file(keystr):
 
 
 def read_sk_any(keystr):
-  try:
+  with suppress(ValueError):
     return decode_sk(keystr)
-  except ValueError:
-    return read_sk_file(keystr)
+  return read_sk_file(keystr)
 
 
 def read_sk_file(keystr):
@@ -154,8 +155,7 @@ def read_sk_file(keystr):
     except ValueError:
       raise ValueError(f"Keyfile {keystr} could not be decoded. Only UTF-8 text is supported.")
     if lines[0] == "-----BEGIN OPENSSH PRIVATE KEY-----":
-      data = b64decode("".join(lines[1:-1]), validate=True)
-      keys = [decode_sk_ssh(data)]
+      keys = sshkey.decode_sk("\n".join(lines))
     elif lines[1].startswith('RWRTY0Iy'):
       keys = [decode_sk_minisign(lines[1])]
     else:
@@ -208,27 +208,6 @@ def decode_sk(keystr):
   except ValueError:
     pass
   raise ValueError(f"Unable to parse private key {keystr!r}")
-
-
-def decode_sk_ssh(data):
-  """Parse the Base64 decoded binary data within a secret key file."""
-  # This needs cleanup, perhaps also a real parser instead of this hack,
-  # and support for encrypted keyfiles
-  magic = b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00 "
-  while magic in data:
-    pos = data.find(magic) + len(magic)
-    edpk = data[pos:pos + 32]
-    pos2 = data.find(edpk + b"\x00\x00\x00@")
-    if pos2 > 0:
-      edpk2 = data[pos2:pos2 + 32]
-      #cmtlen = int.from_bytes(data[pos2 + 36 + 64:pos2 + 36 + 64 + 4], "big")
-      #cmt = data[pos2 + 36 + 64 + 4:pos2 + 36 + 64 + 4 + cmtlen].decode()
-      #pkhash = b64encode(data[pos - len(magic):pos + 32]).decode()
-      if edpk2 == edpk:
-        edsk = data[pos2 + 36:pos2 + 36 + 64]
-        return Key(edsk=edsk, edpk=edpk)
-    data = data[pos + len(magic):]
-  raise ValueError("No ssh-ed25519 keys could be read (password protection is not supported)")
 
 
 def decode_sk_minisign(keystr, pw=None):
