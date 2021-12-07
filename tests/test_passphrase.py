@@ -44,6 +44,13 @@ def test_pwhash_and_authkey():
   assert len(authkey) == 32
   assert authkey.hex() == "a8586c8811ab565a2f30ad876305ebecfc93a3302dd3a3ba2ac83c07a961b9c8"
 
+  with pytest.raises(Exception) as e:
+    passphrase.authkey(bytes(16), bytes(16))
+  assert "Invalid arguments pwhash" in str(e.value)
+
+  with pytest.raises(Exception) as e:
+    passphrase.authkey(bytes(12), bytes(12))
+  assert "Invalid arguments pwhash" in str(e.value)
 
 def test_autocomplete():
   assert passphrase.autocomplete("", 0) == ("", 0, "enter a few letters of a word first")
@@ -64,6 +71,11 @@ def test_pwhints():
   out, valid = passphrase.pwhints("abcabcabcabc")
   assert not valid
   assert 'Repeats like "abcabcabc" are only slightly harder to guess than "abc".' in out
+
+  out, valid = passphrase.pwhints("ridiculouslylongpasswordthatwecannotletzxcvbncheckbecauseitbecomestooslow")
+  assert valid
+  assert 'centuries' in out
+  assert 'Seems long enough' in out
 
   out, valid = passphrase.pwhints("quitelegitlongpwd")
   assert valid
