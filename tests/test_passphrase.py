@@ -1,6 +1,6 @@
 import pytest
 
-from covert import passphrase
+from covert import passphrase, util
 from covert.wordlist import words
 
 
@@ -67,3 +67,17 @@ def test_pwhints():
   out, valid = passphrase.pwhints("faketest")
   assert valid
   assert '16 times faster' in out
+
+
+def test_normalization():
+  """Unicode may be written in many ways that must lead to the same password"""
+  win = '\uFEFF\u1E69'  # BOM + composed (NFC)
+  mac = '\u0073\u0323\u0307'  # Decomposed (NFD)
+  src = 'ṩ'  # Different order decomposed (and possibly mutated in transit of source code)
+  assert win != mac
+  assert mac != src
+  assert src != win
+
+  assert util.encode(win) == b'\xe1\xb9\xa9'
+  assert util.encode(mac) == b'\xe1\xb9\xa9'
+  assert util.encode(src) == b'\xe1\xb9\xa9'
