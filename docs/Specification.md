@@ -134,10 +134,10 @@ time_cost = 8 << max(0, 12 - len(pw_bytes))
 pwhash = argon2id(hashlen=16, salt="covertpassphrase", password=pw_bytes, time_cost=time_cost)
 
 # Stage 2
-authkey = argon2d(hashlen=32, salt=pwhash, password=nonce, time_cost=2)
+authkey = argon2id(hashlen=32, salt=pwhash, password=nonce, time_cost=2)
 ```
 
-The `pwhash` may be kept in device RAM or in a secure keystore in case multiple files need to be processed, avoiding some slow hashing and keeping the original password always secure. The second stage is much faster but adds necessary protection against rainbow tables and provides each file with a unique `authkey` even when the same password is reused. See the **Layout** section above for further discussion on the auth keys.
+The `pwhash` may be kept in device RAM or in a secure keystore in case multiple files need to be processed, avoiding some slow hashing and keeping the original password always secure. The second stage is much faster but adds necessary protection against rainbow tables and provides each file with a unique `authkey` even when the same password is reused. See the **File structure** section above for further discussion on the auth keys.
 
 ### Stage 1: Argon2 on password
 
