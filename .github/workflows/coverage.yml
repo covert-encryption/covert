@@ -33,9 +33,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install tox
 
-      - name: Run tests and report coverage 👩‍💻
+      - name: Run tests 👩‍💻
+        run: |
+          tox -qe py39
+
+      - name: Coverage report 👀
+        run: |
+          tox -qe coverage
+
+      - name: Upload to CodeClimate
         uses: paambaati/codeclimate-action@v2.5.3
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+
+      - name: Upload and verify at Codecov
+        uses: codecov/codecov-action@v2
         with:
-          coverageCommand: tox -e coverage
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}

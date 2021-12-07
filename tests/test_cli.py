@@ -39,4 +39,3 @@ def test_argparser(capsys):
   cap = capsys.readouterr()
   assert not cap.out
   assert "Argument parameter missing: covert enc -Arrp …" in cap.err
-
