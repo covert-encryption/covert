@@ -35,7 +35,7 @@ jobs:
 
       - name: Run tests 👩‍💻
         run: |
-          tox -qe py39
+          tox -qe py39,benchmark
 
       - name: Coverage report 👀
         run: |

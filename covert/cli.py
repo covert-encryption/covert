@@ -307,11 +307,12 @@ def main_benchmark(args):
     block.pos = min(block.spaceleft, dataleft)
     dataleft -= block.pos
 
-  datasize = int(2e9)
+  datasize = int(1e9)
+  a = Archive()
 
   # Count ciphertext size and preallocate mmapped memory
   dataleft = datasize
-  size = sum(len(block) for block in encrypt_file((True, [], [], []), noop_read))
+  size = sum(len(block) for block in encrypt_file((True, [], [], []), noop_read, a))
   ciphertext = mmap.mmap(-1, size)
   ciphertext[:] = bytes(size)
 
@@ -321,7 +322,7 @@ def main_benchmark(args):
     print("ENC", end="", flush=True)
     dataleft, size = datasize, 0
     t0 = perf_counter()
-    for block in encrypt_file((True, [], [], []), noop_read):
+    for block in encrypt_file((True, [], [], []), noop_read, a):
       newsize = size + len(block)
       # There is a data copy here, similar to what happens on file.write() calls.
       ciphertext[size:newsize] = block
@@ -332,7 +333,7 @@ def main_benchmark(args):
 
     print("  ➤   DEC", end="", flush=True)
     t0 = perf_counter()
-    for data in decrypt_file(([], [], []), ciphertext):
+    for data in decrypt_file(([], [], []), ciphertext, a):
       pass
     dur = perf_counter() - t0
     dectotal += dur
