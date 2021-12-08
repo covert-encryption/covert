@@ -21,7 +21,7 @@ R/i7oqt9QnTnc6Op9gw9wSbYQq1bfYtKAfEOxpiQopc0SsYdLa12AUkg0o5s4KPfU6eZX59c4SXD2F8e
 
 Covert generates easy passphrases like `oliveanglepeaceethics` for the above. The encoded message includes random padding to hide the length of the message and it is still shorter than others. For comparison, `gpg` needs six lines instead of one and still ends up revealing the exact length of the message.
 
-## Try it!
+## Installation
 
 [Python](https://www.python.org/downloads/) `pip` installs `qcovert` and `covert` on your system:
 
@@ -30,6 +30,18 @@ pip install "covert[gui]"
 
 qcovert      # Run GUI, or
 covert       # Run in terminal
+```
+
+Python 3.9 or 3.10 is required. On systems still using older versions, you may need to install by:
+```
+python3.9 -m pip install covert
+```
+
+Developers should install a dev repo in editable mode: (consider also using [pipenv](https://pipenv.pypa.io/en/latest/))
+```
+git clone https://github.com/covert-encryption/covert.git
+cd covert
+pip install -e ".[dev,gui]"
 ```
 
 ## File I/O speeds matching the fastest SSDs
