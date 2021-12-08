@@ -41,6 +41,11 @@ jobs:
         run: |
           tox -qe coverage
 
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          fail_ci_if_error: true
+
       - name: Security scan 🛡️
         run: |
           tox -qe security
@@ -48,8 +53,3 @@ jobs:
       - name: Type checking ✅
         run: |
           tox -qe type-checking
-
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v2
-        with:
-          fail_ci_if_error: true

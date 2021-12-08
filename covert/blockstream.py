@@ -130,6 +130,14 @@ class BlockStream:
             raise CryptoError(f"Failed to decrypt block {self.key.hex()} {nblk.hex()} at ({self.ciphertext[p:p+extlen].hex()})[{p}:{p + extlen}]") from None
           self.nonce = noncegen(nblk)
           pos = self._add_to_queue(p, extlen)
+    for qq in self.q:
+      # Restore file position and nonce to the first unused block
+      if qq is self.q[0]:
+        self.nonce = noncegen(qq[1])
+        self.pos = qq[2]
+      # Cancel all jobs still in queue
+      qq[0].cancel()
+
 
   def verify_signatures(self, a):
     a.filehash = self.blkhash
@@ -138,20 +146,20 @@ class BlockStream:
     if a.index.get('s'):
       signatures = [pubkey.Key(edpk=k) for k in a.index['s']]
       for key in signatures:
-        if mmapped:
-          sigblock = ciphertext[filepos:filepos + 80]
-        else:
-          sigblock = ciphertext[filepos:filepos + 80]
-          filepos += 80
-        nsig = sha512(blkhash + key.pk).digest()[:12]
-        ksig = blkhash[:32]
+        sz = self._read(self.end - self.pos + 80)
+        if sz < 80:
+          raise ValueError(f"Missing signature block (needed 80 bytes, got {sz})")
+        sigblock = self.ciphertext[self.pos:self.pos + 80]
+        self.pos += 80
+        nsig = sha512(self.blkhash + key.pk).digest()[:12]
+        ksig = self.blkhash[:32]
         try:
           signature = chacha.decrypt(sigblock, None, nsig, ksig)
         except CryptoError:
           a.signatures.append((False, key, 'Signature corrupted or data manipulated'))
           continue
         try:
-          sign.verify(key, blkhash, signature)
+          sign.verify(key, self.blkhash, signature)
           a.signatures.append((True, key, 'Signature verified'))
         except CryptoError:
           a.signatures.append((False, key, 'Forged signature'))
