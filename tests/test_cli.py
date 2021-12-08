@@ -66,3 +66,35 @@ def test_end_to_end(capsys, tmp_path):
   with open(tmp_path / "data" / "foo.txt", "rb") as f:
     data = f.read()
   assert data == b"test"
+
+
+def test_end_to_end_multiple(capsys, tmp_path):
+  from covert.__main__ import main
+  import sys
+  fname = tmp_path / "crypto.covert"
+
+  # Encrypt foo.txt into crypto.covert, with signature
+  sys.argv = "covert enc tests/data/foo.txt -i tests/keys/ssh_ed25519 --password verytestysecret -r age1cghwz85tpv2eutkx8vflzjfa9f96wad6d8an45wcs3phzac2qdxq9dqg5p -o".split() + [ str(fname) ]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+  assert "foo" in cap.err
+
+  # Decrypt with key
+  sys.argv = "covert dec -i tests/keys/ageid-age1cghwz85tpv2eutkx8vflzjfa9f96wad6d8an45wcs3phzac2qdxq9dqg5p".split() + [ str(fname) ]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+  assert "foo.txt" in cap.err
+  assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
+
+  # Decrypt with passphrase
+  sys.argv = "covert dec --password verytestysecret".split() + [ str(fname) ]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+  assert "foo.txt" in cap.err
+  assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
