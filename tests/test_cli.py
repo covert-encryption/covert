@@ -39,3 +39,30 @@ def test_argparser(capsys):
   cap = capsys.readouterr()
   assert not cap.out
   assert "Argument parameter missing: covert enc -Arrp …" in cap.err
+
+
+def test_end_to_end(capsys, tmp_path):
+  from covert.__main__ import main
+  import sys
+  fname = tmp_path / "crypto.covert"
+
+  # Encrypt data/foo.txt into crypto.covert
+  sys.argv = "covert enc tests/data -R tests/keys/ssh_ed25519.pub -o".split() + [ str(fname) ]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+  assert "foo" in cap.err
+
+  # Decrypt
+  sys.argv = "covert dec -i tests/keys/ssh_ed25519".split() + [ str(fname), "-o", str(tmp_path)]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+  assert "foo.txt" in cap.err
+
+  # Check the file just extracted
+  with open(tmp_path / "data" / "foo.txt", "rb") as f:
+    data = f.read()
+  assert data == b"test"
