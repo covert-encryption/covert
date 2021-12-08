@@ -88,6 +88,7 @@ def test_end_to_end_multiple(capsys, tmp_path):
   assert not ret
   assert not cap.out
   assert "foo.txt" in cap.err
+  assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
 
   # Decrypt with passphrase
   sys.argv = "covert dec --password verytestysecret".split() + [ str(fname) ]
@@ -96,3 +97,4 @@ def test_end_to_end_multiple(capsys, tmp_path):
   assert not ret
   assert not cap.out
   assert "foo.txt" in cap.err
+  assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
