@@ -23,10 +23,10 @@ Covert generates easy passphrases like `oliveanglepeaceethics` for the above. Th
 
 ## Try it!
 
-[Python](https://www.python.org/downloads/) `pip` will add `qcovert` and `covert` on your system:
+[Python](https://www.python.org/downloads/) `pip` installs `qcovert` and `covert` on your system:
 
 ```
-pip install covert[gui]
+pip install "covert[gui]"
 
 qcovert      # Run GUI, or
 covert       # Run in terminal
