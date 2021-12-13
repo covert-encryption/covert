@@ -108,7 +108,7 @@ The archive index may specify that the file is signed, including the correspondi
 
 ## Ascii armor
 
-Covert files and detached signatures may be converted into text strings that are easy to copy&paste e.g. on online discussions. A Covert message can even fit in a Tweet. URL-safe Base64 without padding is used.
+Covert files and detached signatures may be converted into text strings that are easy to copy&paste e.g. on online discussions. A Covert message can even fit in a Tweet. **Standard Base64 without padding** is used but when copied to clipboard Covert adds **triple-backticks** before and after such that messages are shown as code blocks in messaging apps supporting this syntax. Covert armor decode ignores any backticks around the text as well as any `>` quote marks at the beginning of each line even though **these are not parts** of the armored message nor valid Base64 characters.
 
 There are no headers to make it distinct of any random data encoded in Base64, but for maximal privacy and the best performance, raw binary files should be used instead whenever possible.
 
