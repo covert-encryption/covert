@@ -75,13 +75,13 @@ The amount of padding may be adjusted by the `--pad` parameter on covert CLI to 
 fixed_padding = max(0, int(p * 500) - size)
 ```
 
-We use a slightly non-linear formula to calculate an *effective* size, such that the smallest files receive a slightly higher proportion of padding than configured, while files in the gigabyte class are padded a little less to avoid excessive waste of space:
+We use a slightly non-linear formula to calculate an *effective* size, such that the smallest files receive a slightly higher proportion of padding than configured, while files in the gigabyte class are padded considerably less to avoid excessive waste of space. `log` is the natural logarithm.
 
 ```python
-eff_size = 200 + .7e8 * log2(1 + 1e-8 * (size + fixed_padding))
+eff_size = 200 + 1e8 * log(1 + 1e-8 * (size + fixed_padding))
 ```
 
-The random padding is drawn from exponential distribution, calculated in a numerically stable way using two uint32 uniform random values `rnd1` and `rnd2` to obtain the coefficient `r` that has a mean value of 1.0 and is most of the time lower than that, but that may rise up to 45 in extremely rare occassions:
+The random padding is drawn from exponential distribution, calculated in a numerically stable way (in double precision floating point) using two uint32 uniform random numbers `rnd1` and `rnd2` to obtain the coefficient `r` that has a mean value of 1.0 and is most of the time lower than that, but that may rise up to 45 in extremely rare occassions:
 
 ```python
 r = log(2**32) - log(rnd1 + rnd2 * 2**-32 + 2**-33)

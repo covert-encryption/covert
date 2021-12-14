@@ -1,7 +1,7 @@
 import platform
 import unicodedata
 from base64 import b64decode, b64encode
-from math import log, log2
+from math import log
 from secrets import choice, token_bytes
 
 ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
@@ -83,8 +83,7 @@ def random_padding(size, p):
   # Choose the amount of fixed padding to hide very short messages
   fixed_padding = max(0, int(p * 500) - size)
   # Random padding on effective size (increased for small data, decreased for gigabyte class)
-  eff_size = 200 + .7e8 * log2(1 + 1e-8 * (size + fixed_padding))
-  rnd = 1 + 2 * int.from_bytes(token_bytes(8), "little")
-  r = log(1 << 65) - log(rnd)  # Multiplier between 0.0 and 45.05 with mean of 1.0
+  eff_size = 200 + 1e8 * log(1 + 1e-8 * (size + fixed_padding))
+  r = log(1 << 65) - log(1 + 2 * int.from_bytes(token_bytes(8), "little"))
   # Apply pad-to-fixed-size for very short messages plus random padding
-  return fixed_padding + int(round(p * r * eff_size))
+  return fixed_padding + int(round(r * p * eff_size))
