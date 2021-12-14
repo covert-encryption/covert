@@ -72,7 +72,7 @@ It is also important that the key is under no circumstances known to outsiders, 
 
 ### Auth fields
 
-Auth keys for passwords are produced by Argon2, which uses Blake2b hashing to produce its output, and this should by design be unrecognizable. The output is also always different even for the same password, provided that the 12 bytes of nonce in hash calculation are different. Auth keys for public keys are truncated SHA-512 hashes of generated shared ECDH secrets. The shared secret and the auth key are always different depending on the 
+Auth keys for passwords are produced by Argon2, which uses Blake2b hashing to produce its output, and this should by design be unrecognizable. The output is also always different even for the same password, provided that the 12 bytes of nonce in hash calculation are different. Auth keys for public keys are truncated SHA-512 hashes of generated shared ECDH secrets. The shared secret and the auth key are always different depending on the
 
 Care must be taken in implementation of encryption not to include same auth method twice if the same password or the same public key was specified multiple times, as doing so could defeat all security (if one of the duplicates became the file key and the other appeared as an all-zero auth token), or at least cause duplicated strings to appear in header.
 
@@ -119,3 +119,32 @@ For multiple recipients, several auth keys are xorred with the same file key. Is
 For a single authentication method, 20 potential file keys must be attempted for all possible Block0 starting offset and ending offsets. In the worst case this gives 124212 decryption attempts, all of which are expected to fail if the correct key is not known. This amounts to 17 bits against the 128 bits of Poly1305. Thus, 111 bits remain, meaning that it is impossible to find a wrong combination that fits.
 
 Although it may seem expensive, performance-wise the search is really not an issue. All those trials take a fraction of a second, and if needed, the number of combinations can be cut drastically if the block is assumed to end at EOF or offset 1024 (as it normally is), rather than trying every possible length, at least before performing the full search. We also expect no significant side channel leak of this search over that of a normal run of the cipher over a large file.
+
+## Random padding
+
+The only way to completely hide the presence of information in communication is to constantly send a stream of random bits, that may or may not contain encrypted messages. Even then such a continuous stream makes a lot of traffic that is easily noticed. Traditional radio stations using this system have been used since although the transmitter is evident to anyone tuning in, the intended recipient can covertly listen and find the encrypted messages that no-one else can see.
+
+A little less extreme choice, also considered a gold standard, is to pad all messages to a given fixed length. Say, if all messages ever sent are exactly 1024 bytes of random-looking data, the only thing an eavesdropper learns is the time when each message was sent, and potentially who sent and who received it depending on transport medium (e.g. an e-mail would immediately reveal this metadata). The drawback is that messages larger than the limit cannot be sent, as even splitting one message into two would give away by timing that a larger message was sent.
+
+Researchers have proposed various other options to fixed length padding, such that less space is wasted and that messages of any size can be sent. Such **deterministic** schemes are popular in academia, and of them [Padme](https://petsymposium.org/2019/files/papers/issue4/popets-2019-0056.pdf) is very frequently mentioned. The premise is that by making the padding size deterministic, any leak of information is minimised.
+
+We argue that such assertion is wrong, and that the use of a **random padding** is much better for minimising information leakage in most practical use, although it should be combined with some fixed size padding to avoid ever revealing short message lengths. Padme is used in comparison to show the reasoning and also because we also considered various random schemes based on it.
+
+![Padding size](https://github.com/covert-encryption/covert/raw/main/docs/in-out.webp)
+**Covert on left, Padme on right:** Message data is shown in grey, and the padding added on top of it in orange. Covert padding is randomised, visualised by fading shades of orange, where Padme shows blocks of orange for its fixed padding sizes.
+
+Covert implements fixed size padding for short messages to 25 bytes, also adding random padding on top of that, as seen in the leftmost region of the graph. It needs to be noted that the random distribution also stays the same for messages up to 25 bytes, and messages a bit larger have distributions largely overlapping those of the short messages. In general, messages of similar size cannot be reliably discriminated by their output sizes.
+
+Padme reveals small message sizes directly, and presumably is only designed for larger sizes. By design, each output size only corresponds to a strict range of message sizes.
+
+The deterministic approach may seem better if an adversary can somehow request the file to be encrypted many times to collect data on variation of size knowing that the target is always the same. If an adversary observes a ciphertext 104 bytes, he can only determine that the ciphertext is 97 to 104 bytes long, not its precise length.
+
+Consider a lottery service that sends you an encrypted ticket that you can choose to pay on for the decryption key and to find out if you won. Something like `{ username: "gamer", this_ticket_wins: false }`. Suppose that the losing tickets are 100 bytes and the winning tickets are 99 bytes prior to padding. If Covert padding was used, you could request for many tickets, seeing various sizes mostly higher than 100 bytes. But if you got lucky, there is a ticket of 99 bytes with a guaranteed win. With Padme all tickets would come out 104 bytes, giving the gamer no advantage.
+
+However, the gamer gets a *perfect* advantage with Padme if the ticket lengths happen to fall on 104 and 105 bytes, or around any other deterministic boundary. As you may have already considered, the choice of the gamer's username could be used to manipulate the message length to make that happen.
+
+The biggest drawback with any deterministic scheme is that the same message always has the same ciphertext length, so an adversary can easily learn about *different* messages simply by observing changes in ciphertext length, even though he may never learn the precise message lengths.
+
+
+![Output size distribution](https://github.com/covert-encryption/covert/raw/main/docs/distribution.webp)
+The sizes themselves can be reveal the padding scheme if the file sizes are not distributed such that any byte size is likely to occur. Padme produces only a set of very distinct sizes, so if an adversary were to discover a set of files containing *only* such sizes, or even just one larger file that happens to be exactly on one of the Padme sizes, he can reasonably assert that it is in fact Padme/PURB encrypted data. Covert maintains confidentiality and deniability by producing output file sizes that reveal very little of either the content or the packaging.
