@@ -76,16 +76,15 @@ def xor(a, b):
   return (a ^ b).to_bytes(l, "little")
 
 
-def random_padding(total, p):
-  """Calculate random padding size in bytes as (roughly) proportion p of total size."""
+def random_padding(size, p):
+  """Calculate random padding size in bytes as (roughly) proportion p of message size."""
   if not p:
     return 0
   # Choose the amount of fixed padding to hide very short messages
-  low = int(p * 500)
-  padfixed = max(0, low - total)
+  fixed_padding = max(0, int(p * 500) - size)
   # Random padding on effective size (increased for small data, decreased for gigabyte class)
-  effsize = 200 + .7e8 * log2(1 + 1e-8 * max(low, total))
-  r = 1 + 2 * int.from_bytes(token_bytes(8), "little")
-  m = log(1 << 65) - log(r)  # Multiplier between 0.0 and 45.05 with mean of 1.0
+  eff_size = 200 + .7e8 * log2(1 + 1e-8 * (size + fixed_padding))
+  rnd = 1 + 2 * int.from_bytes(token_bytes(8), "little")
+  r = log(1 << 65) - log(rnd)  # Multiplier between 0.0 and 45.05 with mean of 1.0
   # Apply pad-to-fixed-size for very short messages plus random padding
-  return padfixed + int(round(m * p * effsize))
+  return fixed_padding + int(round(p * r * eff_size))
