@@ -137,7 +137,7 @@ Covert implements fixed size padding for short messages to 25 bytes, also adding
 
 Padme reveals small message sizes directly, and presumably is only designed for larger sizes. By design, each output size only corresponds to a strict range of message sizes.
 
-The deterministic approach may seem better if an adversary can somehow request the file to be encrypted many times to collect data on variation of size knowing that the target is always the same. If an adversary observes a ciphertext 104 bytes, he can only determine that the ciphertext is 97 to 104 bytes long, not its precise length.
+The deterministic approach may seem better if an adversary can somehow request the file to be encrypted many times to collect data on variation of size knowing that the target is always the same. If an adversary observes a Padme ciphertext 104 bytes, he can only determine that the message is 97 to 104 bytes long, not its precise length.
 
 Consider a lottery service that sends you an encrypted ticket that you can choose to pay on for the decryption key and to find out if you won. Something like `{ username: "gamer", this_ticket_wins: false }`. Suppose that the losing tickets are 100 bytes and the winning tickets are 99 bytes prior to padding. If Covert padding was used, you could request for many tickets, seeing various sizes mostly higher than 100 bytes. But if you got lucky, there is a ticket of 99 bytes with a guaranteed win. With Padme all tickets would come out 104 bytes, giving the gamer no advantage.
 
