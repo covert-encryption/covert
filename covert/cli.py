@@ -14,9 +14,7 @@ from tqdm import tqdm
 from covert import lazyexec, passphrase, pubkey, tty, util
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
-
-ARMOR_MAX_SIZE = 32 << 20  # If output is a file (limit our memory usage)
-TTY_MAX_SIZE = 100 << 10  # If output is a tty (limit too lengthy spam)
+from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 
 
 def run_decryption(infile, args, auth):
@@ -269,7 +267,7 @@ def main_dec(args):
     infile = BytesIO(data)
     total_size = len(data)
     del data
-  elif 40 <= total_size <= ARMOR_MAX_SIZE:
+  elif 40 <= total_size <= 2 * ARMOR_MAX_SIZE:
     # Try reading the file as armored text rather than binary
     with infile:
       data = infile.read()
