@@ -26,7 +26,7 @@ setup(
     "tqdm>=4.62",
     "msgpack>=1.0",
     "pyperclip>=1.8",
-    "zxcvbn-covert>=5.0",
+    "zxcvbn-covert>=5.0.1",
   ],
   extras_require={
     "gui": ["pyside6>=6.2.1"],
