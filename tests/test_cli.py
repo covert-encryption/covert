@@ -161,16 +161,14 @@ def test_end_to_end_large_file(capsys, tmp_path):
 
   # Try encrypting without -o
   sys.argv = f"covert -ea -R tests/keys/ssh_ed25519.pub".split() + [ str(fname) ]
-  with pytest.raises(ValueError) as excinfo:
-    main()
-  assert "How about -o FILE to write a file?" in str(excinfo.value)
+  main()
   cap = capsys.readouterr()
   assert not cap.out
+  assert "How about -o FILE to write a file?" in cap.err
 
   # Try encrypting with -o
-  sys.argv = f"covert -eaR tests/keys/ssh_ed25519 -o".split() + [ str(outfname), str(fname) ]
-  with pytest.raises(ValueError) as excinfo:
-    main()
-  assert "The data is too large for --armor." in str(excinfo.value)
+  sys.argv = f"covert -eaR tests/keys/ssh_ed25519.pub -o".split() + [ str(outfname), str(fname) ]
+  main()   
   cap = capsys.readouterr()
   assert not cap.out
+  assert "The data is too large for --armor." in cap.err
