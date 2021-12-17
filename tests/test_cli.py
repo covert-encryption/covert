@@ -163,14 +163,14 @@ def test_end_to_end_large_file(capsys, tmp_path):
   sys.argv = f"covert -ea --password verytestysecret".split() + [ str(fname) ]
   with pytest.raises(ValueError) as excinfo:
     main()
-    assert "How about -o FILE to write a file?" in str(excinfo.value)
   cap = capsys.readouterr()
+  assert "How about -o FILE to write a file?" in str(excinfo.value)
   assert not cap.out
 
   # Try encrypting with -o
   sys.argv = f"covert -ea --password verytestysecret -o".split() + [ str(outfname), str(fname) ]
   with pytest.raises(ValueError) as excinfo:
     main()
-    assert "The data is too large for --armor." in str(excinfo.value)
   cap = capsys.readouterr()
+  assert "The data is too large for --armor." in str(excinfo.value)
   assert not cap.out
