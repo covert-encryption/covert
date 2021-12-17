@@ -129,12 +129,11 @@ def test_end_to_end_armormaxsize(capsys, tmp_path):
   outfname = tmp_path / "crypto.covert"
 
   # Write 31 MiB on test.dat
-  f = open(f"{str(fname)}", "wb")
-  f.seek(32505855)
-  f.write(b"\0")
-  f.close()
+  with open(f"{fname}", "wb") as f:
+    f.seek(32505855)
+    f.write(b"\0")
 
-  # Encrypt test.dat with armor and padding
+  # Encrypt test.dat with armor and no padding
   sys.argv = f"covert -e --password verytestysecret --pad 0 -ao".split() + [ str(outfname), str(fname) ]
   ret = main()
   cap = capsys.readouterr()
@@ -149,25 +148,29 @@ def test_end_to_end_armormaxsize(capsys, tmp_path):
   assert not cap.out
 
 
+def test_end_to_end_large_file(capsys, tmp_path):
+  from covert.__main__ import main
+  import sys
+  fname = tmp_path / "test.dat"
+  outfname = tmp_path / "crypto.covert"
 
   # Write file with size too large for --armor
-  f = open(f"{str(fname)}", "wb")
-  f.seek(42505855)
-  f.write(b"\0")
-  f.close()
+  with open(f"{fname}", "wb") as f:
+    f.seek(42505855)
+    f.write(b"\0")
 
   # Try encrypting without -o
   sys.argv = f"covert -ea --password verytestysecret".split() + [ str(fname) ]
-  ret = main()
+  with pytest.raises(ValueError) as excinfo:
+    main()
+    assert "How about -o FILE to write a file?" in str(excinfo.value)
   cap = capsys.readouterr()
-  assert not ret
   assert not cap.out
-  assert "Too much data for console. How about -o FILE to write a file?" in cap.err
 
   # Try encrypting with -o
-  sys.argv = f"covert -e --password verytestysecret -ao".split() + [ str(outfname), str(fname) ]
-  ret = main()
+  sys.argv = f"covert -ea --password verytestysecret -o".split() + [ str(outfname), str(fname) ]
+  with pytest.raises(ValueError) as excinfo:
+    main()
+    assert "The data is too large for --armor." in str(excinfo.value)
   cap = capsys.readouterr()
-  assert not ret
   assert not cap.out
-  assert "The data is too large for --armor." in cap.err
