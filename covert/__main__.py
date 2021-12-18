@@ -1,6 +1,5 @@
 import os
 import sys
-from sys import stderr, stdout
 import colorama
 import covert
 from covert.cli import main_benchmark, main_dec, main_enc
@@ -89,7 +88,7 @@ def argparse():
   av = sys.argv[1:]
   if not av or any(a.lower() in ('-h', '--help') for a in av):
     first, rest = cmdhelp.rstrip().split('\n', 1)
-    if stdout.isatty():
+    if sys.stdout.isatty():
       print(f'\x1B[1;44m{first:78}\x1B[0m\n{rest}')
     else:
       print(f'{first}\n{rest}')
@@ -111,7 +110,7 @@ def argparse():
   elif av[0] in ('bench', 'benchmark'):
     args.mode, ad, modehelp = 'benchmark', benchargs, f"{hdrhelp}"
   else:
-    stderr.write(' 💣  Invalid or missing command (enc/dec/benchmark).\n')
+    sys.stderr.write(' 💣  Invalid or missing command (enc/dec/benchmark).\n')
     sys.exit(1)
   
   aiter = iter(av[1:])
@@ -133,7 +132,7 @@ def argparse():
     if not a.startswith('--') and len(a) > 2:
       if any(arg not in shortargs for arg in list(a[1:])):
         falseargs = [arg for arg in list(a[1:]) if arg not in shortargs]
-        stderr.write(f' 💣  {falseargs} is not an argument: covert {args.mode} {a}\n')
+        sys.stderr.write(f' 💣  {falseargs} is not an argument: covert {args.mode} {a}\n')
         sys.exit(1)
       a = [f'-{shortarg}' for shortarg in list(a[1:]) if shortarg in shortargs]
     if isinstance(a, str):
@@ -143,7 +142,7 @@ def argparse():
       if isinstance(av, int):
         continue
       if argvar is None:
-        stderr.write(f'{modehelp}\n 💣  Unknown argument: covert {args.mode} {aprint}\n')
+        sys.stderr.write(f'{modehelp}\n 💣  Unknown argument: covert {args.mode} {aprint}\n')
         sys.exit(1)
       try:
         var = getattr(args, argvar)
@@ -156,7 +155,7 @@ def argparse():
         else:
           setattr(args, argvar, True)
       except StopIteration:
-        stderr.write(f'{modehelp}\n 💣  Argument parameter missing: covert {args.mode} {aprint} …\n')
+        sys.stderr.write(f'{modehelp}\n 💣  Argument parameter missing: covert {args.mode} {aprint} …\n')
         sys.exit(1)
 
   return args
@@ -193,11 +192,11 @@ def main():
     else:
       raise Exception('This should not be reached')
   except ValueError as e:
-    stderr.write(f"Error: {e}\n")
+    sys.stderr.write(f"Error: {e}\n")
   except BrokenPipeError:
-    stderr.write('I/O error (broken pipe)\n')
+    sys.stderr.write('I/O error (broken pipe)\n')
   except KeyboardInterrupt:
-    stderr.write("Interrupted.\n")
+    sys.stderr.write("Interrupted.\n")
 
 
 if __name__ == "__main__":

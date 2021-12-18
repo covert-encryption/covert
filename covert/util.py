@@ -5,6 +5,8 @@ from math import log
 from secrets import choice, token_bytes
 
 ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
+ARMOR_MAX_SIZE = 32 << 20  # If output is a file (limit our memory usage)
+TTY_MAX_SIZE = 100 << 10  # If output is a tty (limit too lengthy spam)
 B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 IS_APPLE = platform.system() == "Darwin"
 

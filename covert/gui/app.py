@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QGridLayout, QHBoxLayou
 from covert import passphrase, pubkey, util
 from covert.archive import Archive
 from covert.blockstream import BlockStream, encrypt_file
-from covert.cli import ARMOR_MAX_SIZE, TTY_MAX_SIZE
+from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 from covert.gui.encrypt import AuthInput
 from covert.gui.util import datafile, setup_interrupt_handling
 from covert.gui.widgets import DecryptWidget, EncryptToolbar, MethodsWidget
@@ -170,7 +170,7 @@ class MainWindow(QWidget):
     # TODO: Implement in a thread using mmap instead
     with open(file, "rb") as f:
       data = f.read()
-    if 40 <= len(data) <= ARMOR_MAX_SIZE:
+    if 40 <= len(data) <= 2 * ARMOR_MAX_SIZE:
       # Try reading the file as armored text rather than binary
       with suppress(ValueError):
         data = util.armor_decode(data.decode())

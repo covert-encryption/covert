@@ -98,3 +98,77 @@ def test_end_to_end_multiple(capsys, tmp_path):
   assert not cap.out
   assert "foo.txt" in cap.err
   assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
+
+
+def test_end_to_end_shortargs_armored(capsys, tmp_path):
+  from covert.__main__ import main
+  import sys
+  fname = tmp_path / "crypto.covert"
+
+  # Encrypt foo.txt into crypto.covert
+  sys.argv = "covert -eRao tests/keys/ssh_ed25519.pub".split() + [ str(fname), 'tests/data/foo.txt' ]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+  assert "foo" in cap.err
+
+  # Decrypt with key
+  sys.argv = "covert -di tests/keys/ssh_ed25519".split() + [ str(fname) ]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+  assert "foo.txt" in cap.err
+
+
+def test_end_to_end_armormaxsize(capsys, tmp_path):
+  from covert.__main__ import main
+  import sys
+  fname = tmp_path / "test.dat"
+  outfname = tmp_path / "crypto.covert"
+
+  # Write 31 MiB on test.dat
+  with open(f"{fname}", "wb") as f:
+    f.seek(32505855)
+    f.write(b"\0")
+
+  # Encrypt test.dat with armor and no padding
+  sys.argv = f"covert -eR tests/keys/ssh_ed25519.pub --pad 0 -ao".split() + [ str(outfname), str(fname) ]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+
+  # Decrypt crypto.covert with passphrase
+  sys.argv = "covert -di tests/keys/ssh_ed25519".split() + [ str(outfname) ]
+  ret = main()
+  cap = capsys.readouterr()
+  assert not ret
+  assert not cap.out
+
+
+def test_end_to_end_large_file(capsys, tmp_path):
+  from covert.__main__ import main
+  import sys
+  fname = tmp_path / "test.dat"
+  outfname = tmp_path / "crypto.covert"
+
+  # Write file with size too large for --armor
+  with open(f"{fname}", "wb") as f:
+    f.seek(42505855)
+    f.write(b"\0")
+
+  # Try encrypting without -o
+  sys.argv = f"covert -ea -R tests/keys/ssh_ed25519.pub".split() + [ str(fname) ]
+  main()
+  cap = capsys.readouterr()
+  assert not cap.out
+  assert "How about -o FILE to write a file?" in cap.err
+
+  # Try encrypting with -o
+  sys.argv = f"covert -eaR tests/keys/ssh_ed25519.pub -o".split() + [ str(outfname), str(fname) ]
+  main()   
+  cap = capsys.readouterr()
+  assert not cap.out
+  assert "The data is too large for --armor." in cap.err
