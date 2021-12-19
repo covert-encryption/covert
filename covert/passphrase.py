@@ -1,6 +1,6 @@
 import secrets
+import sys
 from contextlib import suppress
-from sys import argv
 
 import nacl.bindings as sodium
 from zxcvbn import zxcvbn
@@ -156,7 +156,7 @@ def ask(prompt, create=False):
 
 def pwhints(pwd: str):
   maxlen = 20  # zxcvbn gets slow with long passwords
-  z = zxcvbn(pwd[:maxlen], user_inputs=argv)
+  z = zxcvbn(pwd[:maxlen], user_inputs=sys.argv)
   fb = z["feedback"]
   warn = fb["warning"]
   sugg = fb["suggestions"]
