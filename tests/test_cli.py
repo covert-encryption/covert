@@ -159,3 +159,21 @@ def test_end_to_end_large_file(covert, tmp_path):
   cap = covert("-eaRo", "tests/keys/ssh_ed25519.pub", outfname, fname, exitcode=10)
   assert not cap.out
   assert "The data is too large for --armor." in cap.err
+
+
+def test_errors(covert):
+  cap = covert()
+  assert "Usage:" in cap.out
+  assert not cap.err
+
+  cap = covert('-eINvalid', '--help')
+  assert "Usage:" in cap.out
+  assert not cap.err
+
+  cap = covert('-eINvalid', exitcode=1)
+  assert not cap.out
+  assert "not an argument: covert enc -INvalid" in cap.err
+
+  cap = covert("-o", exitcode=1)
+  assert not cap.out
+  assert "Invalid or missing command" in cap.err
