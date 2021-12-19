@@ -112,7 +112,7 @@ def argparse():
   else:
     sys.stderr.write(' 💣  Invalid or missing command (enc/dec/benchmark).\n')
     sys.exit(1)
-  
+
   aiter = iter(av[1:])
   longargs = [flag[1:] for switches in ad.values() for flag in switches if flag.startswith("--")]
   shortargs = [flag[1:] for switches in ad.values() for flag in switches if not flag.startswith("--")]

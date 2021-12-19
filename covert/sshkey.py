@@ -1,15 +1,16 @@
 from __future__ import annotations
+
+from base64 import b64decode
 from typing import List
 
+import bcrypt
 # Unfortunately pynacl does not offer AES at all.
 # It would be nice if this could be replaced with some tiny AES library.
 from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers.modes import CTR
 
-from base64 import b64decode
 from covert import passphrase, pubkey, util
-import bcrypt
 
 HEADER = "-----BEGIN OPENSSH PRIVATE KEY-----"
 FOOTER = "-----END OPENSSH PRIVATE KEY-----"

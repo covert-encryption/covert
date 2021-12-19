@@ -1,7 +1,7 @@
+import itertools
 import mmap
 import os
 import sys
-import itertools
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from io import BytesIO

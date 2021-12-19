@@ -7,7 +7,8 @@ from urllib.request import urlopen
 
 import nacl.bindings as sodium
 
-from covert import bech, elligator, passphrase, sshkey, util
+from covert import bech, passphrase, sshkey, util
+from covert.elliptic import elligator
 
 
 def derive_symkey(nonce, local, remote):
@@ -88,17 +89,17 @@ class Key:
 
   def _generate_public(self):
     """Convert secret keys to public"""
+    if self.edsk:
+      edsk_hashed = self.sk
+      edpk_conv = sodium.crypto_scalarmult_ed25519_base(edsk_hashed)
+      if self.edpk and self.edpk != edpk_conv:
+        raise ValueError(f"Secret and public key mismatch\n  {self.edpk.hex()}\n  {edpk_conv.hex()}")
+      self.edpk = edpk_conv
     if self.sk:
       pk_conv = sodium.crypto_scalarmult_base(self.sk)
       if self.pk and self.pk != pk_conv:
         raise ValueError("Secret and public key mismatch")
       self.pk = pk_conv
-    if self.edsk:
-      edsk_hashed = self.sk
-      edpk_conv = sodium.crypto_scalarmult_ed25519_base(edsk_hashed)
-      if self.edpk and self.edpk != edpk_conv:
-        raise ValueError("Secret and public key mismatch")
-      self.edpk = edpk_conv
 
   def _validate(self):
     """Test if the keypairs work correctly"""
