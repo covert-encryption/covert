@@ -28,16 +28,20 @@ def test_fe():
 
 
 def test_ed():
-  assert G == EdPoint.from_xbytes((9).to_bytes(32, "little"))
+  assert G == EdPoint.from_montbytes((9).to_bytes(32, "little"))
 
-  assert repr(ZERO) == "EdPoint(\n  zero,\n  one,\n  one,\n  zero,\n)"
+  assert repr(ZERO) == "ZERO"  # EdPoint(zero, one, one, zero)
   assert str(ZERO) == "01" + 31 * "00"
 
   edpk, edsk = sodium.crypto_sign_keypair()
-  k = edsk_scalar(edsk)
+  k = secret_scalar(edsk)
   K = k * G
   assert bytes(K).hex() == edpk.hex()
 
+def test_hashmap():
+  # Just hitting the __hash__ functions
+  assert len({fe(i * p) for i in range(2)}) == 1
+  assert len({i * L for i in range(10)}) == 8
 
 def test_lo():
   # Dirty generator
@@ -65,13 +69,16 @@ def test_lo():
   # Low order points
   assert LO[0] == ZERO
   assert LO[1] == L
+  assert repr(LO[0]) == "ZERO"
+  assert repr(LO[1]) == "L"
+  assert repr(LO[2]) == "LO[2]"
   for i, P in enumerate(LO):
     assert 8 * P == ZERO
     assert P.is_low_order
     assert not P.is_prime_group
     assert P.subgroup == i
 
-    s = edsk_scalar(token_bytes(32))
+    s = secret_scalar(token_bytes(32))
     Q = s * G + P
     assert not Q.is_low_order
     assert Q.subgroup == i
@@ -82,6 +89,33 @@ def test_lo():
   Q = s * D
   assert Q.subgroup == s % 8
   assert Q == P + LO[Q.subgroup]
+
+
+def test_edpk_vs_sodium():
+  edpk, edsk = sodium.crypto_sign_keypair()
+
+  k = secret_scalar(edsk)
+  K = k * G
+  edpk2 = bytes(K)
+  assert edpk2.hex() == edpk.hex()
+
+def test_mont_vs_sodium():
+  edpk, edsk = sodium.crypto_sign_keypair()
+  sk = sodium.crypto_sign_ed25519_sk_to_curve25519(edsk)
+  pk = sodium.crypto_sign_ed25519_pk_to_curve25519(edpk)  # Note: the sign is lost (high bit random)
+  assert pk[31] & 0x80 == 0
+  # Mont secret key is just the clamped scalar
+  k = secret_scalar(edsk)
+  assert tobytes(k).hex() == sk.hex()
+  # Public key converted from edsk
+  K = k * G
+  pkconv = K.montbytes  # sign always 0 to match sodium
+  assert pk.hex() in pkconv.hex()
+  # Public key converted from montpk
+  K2 = EdPoint.from_montbytes(pk)
+  pkconv2 = K2.montbytes_sign
+  assert abs(K) == K2  # K2 from sodium is always positive
+  assert pkconv2.hex() == pk.hex()
 
 
 def test_sign_eddsa():
@@ -112,19 +146,77 @@ def test_sign_xeddsa():
   sig2 = xed_sign(sk, msg2, nonce)
   assert len(sig1) == 64
   assert sig1 != sig2
+  # Valid signatures
   xed_verify(pk, msg1, sig1)
   xed_verify(pk, msg2, sig2)
-  with pytest.raises(ValueError):
+
+  # Invalid signatures
+  with pytest.raises(ValueError) as exc:
     xed_verify(pk, msg2, sig1)
-  with pytest.raises(ValueError):
+  assert "Signature mismatch" == str(exc.value)
+
+  with pytest.raises(ValueError) as exc:
     xed_verify(pk, msg1, sig2)
+  assert "Signature mismatch" == str(exc.value)
 
+  # Errors
+  with pytest.raises(ValueError) as exc:
+    xed_verify(pk, msg1, b"")
+  assert "Invalid signature length" == str(exc.value)
 
-def test_elligator():
-  while True:
-    pk, sk = sodium.crypto_box_keypair()
-    if ishashable(pk):
-      break
-  hidden = keyhash(pk)
-  pk2 = unhash(hidden)
-  assert pk == pk2
+  for P in LO[1:]:  # Test LO points noting that they cause different exceptions
+    with pytest.raises(ValueError) as exc:
+      xed_verify(P.montbytes_sign, msg1, sig1)
+    assert "Invalid public key provided" == str(exc.value)
+
+    with pytest.raises(ValueError) as exc:
+      xed_verify(pk, msg1, P.montbytes_sign + sig1[32:])
+    assert "Invalid R point on signature" == str(exc.value)
+
+  with pytest.raises(ValueError) as exc:
+    xed_verify(pk, msg1, sig1[:32] + tobytes(q))
+  assert "Invalid s value on signature" == str(exc.value)
+
+def test_elligator_highlevel():
+  subgroups = set()
+
+  for i in range(10):
+    hidden, edsk = egcreate()
+    assert eghide(edsk) == hidden
+
+    # "curve25519 sk" conversion is really sha + clamp to get ed25519 scalar
+    sk = sodium.crypto_sign_ed25519_sk_to_curve25519(edsk + bytes(32))  # + all zeroes bogus edpk
+    edpk = sodium.crypto_scalarmult_ed25519_base(sk)  # ... so that we can calculate the edpk
+    pk = sodium.crypto_sign_ed25519_pk_to_curve25519(edpk)
+
+    # Can we restore the point?
+    P = egreveal(hidden)  # restored dirty point
+    P2 = secret_scalar(edsk) * G  # clean point from original secret
+    assert P.undirty == P2
+
+    # Convert the restored point to Ed/Mont
+    edpk2 = bytes(P.undirty)
+    pk2 = P.undirty.montbytes
+    assert edpk2.hex() == edpk.hex()
+    assert pk2.hex() == pk.hex()
+
+    # Test ECDH protocol (using the dirty point)
+    rpk, rsk = sodium.crypto_box_keypair()  # Recipient keypair
+    shared1 = sodium.crypto_scalarmult(sk, rpk)
+    shared2 = sodium.crypto_scalarmult(rsk, pk2)  # Using elligatored pk2
+    assert shared1.hex() == shared2.hex()
+
+    assert P.undirty == EdPoint.from_bytes(edpk)
+    assert bytes(P.undirty).hex() == edpk.hex()
+
+    # Keep track of the subgroups seen!
+    subgroups.add(P.subgroup)
+    if len(subgroups) > 2: break
+
+  # Verify that we saw multiple subgroups
+  assert len(subgroups) > 1, f"Should have found several but got {subgroups=}"
+
+def test_non_elligator_key():
+  with pytest.raises(ValueError) as exc:
+    eghide(tobytes(5))  # edsk chosen by trial and error so that the pk is not good for elligator
+  assert "The key cannot be Elligator hashed" == str(exc.value)

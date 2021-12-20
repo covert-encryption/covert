@@ -1,10 +1,120 @@
 # Elligator2 over Curve25519, see section 5 of
 # https://www.shiftleft.org/papers/elligator/elligator.pdf
 
-from secrets import randbits
+## Why it is extremely difficult to make indistinguishible from random keys
+
+# Curve25519 public key is the u-coordinate of a point representing the key.
+# It is a value up to p - 1 (so it fits neatly in 255 bits). Not all values
+# are used in standard public keys because
+# - The 256th bit is always zero (bitmask to check)
+# - Only half of all u values are valid points (curve equation to check)
+# - Only 1/8 of the valid points are used in standard public keys (subgroup)
+#
+# These properties can be easily tested, with only 3 % probability (1/32) of
+# that data being just 32 random bytes rather than a standard key.
+#
+# Any unused high bits can easily be filled with random bits, solving the
+# first problem.
+#
+# Elligator 2 solves the second problem, producing 254 bit values, of which
+# practically all are used by valid points. The high bits can be filled with
+# random values to make it a 32-byte sequence indistinguishible from random.
+#
+# Only half of the *valid* u coordinates can be encoded by Elligator 2 at all,
+# so in practice we need to try and create key pairs until a public key that
+# can be hashed is found.
+#
+# A quick entropy calculation: the u value is 255 bits minus one for non-points
+# and another for non-hashable points. So, Elligator encodes 253 bits worth of
+# u coordinate. Why is the value then 254 bits? Because it can also encode
+# a sign bit. A sign that is never used with Curve25519 but that exists anyway
+# and that won't affect the all-important u coordinate, but that will
+# completely mix the Elligator output (not only one bit of it).
+#
+# All good until now, except that the adversary can still mask out the high
+# bits, unhash the Elligator 2 and obtain a curve point. Now, if he multiplies
+# that point by q, it reduces to one of the eight *low order points* there are
+# in Curve25519. Standard public keys all reduce to big flat ZERO, where any
+# random point has equal chance of being in any of the eight sub groups, each
+# represented by its own low order point.
+#
+# The third problem needs to be solved by custom key generation that creates
+# *dirty points*, public keys that can be in any sub group, rather than only
+# in the prime group.
+#
+# We can make a point dirty by adding to it a random low point. This does not
+# affect the result of standard ECDH using that key, as any subgroups are
+# cancelled by the multiplication in those (because the secret scalars are
+# multiples of eight after the standard clamping required by the protocols)
+
+## High level API
+
+# Designed around Ed25519 because edsk can be easily converted into Montgomery
+# but the opposite is not possible. Also, starting with Ed25519 we have useful
+# extra bits to randomise the points, without having to create random numbers.
+# Curve25519 sk are already clamped, losing those crucial three low bits.
+
+# The sign of Ed25519 (lowest bit of x) is used as Elligator 2 "v sign", to
+# avoid having to calculate the v coordinate (which is rarely used anywhere),
+# but to still allow recovering the original Ed25519 public key exactly.
+
+from contextlib import suppress
+from secrets import token_bytes
 from typing import Tuple
 
+from .ed import LO, EdPoint, G, dirty_scalar
 from .scalar import fe, one, p, sqrtm1, zero
+from .util import sha, tobytes, toint
+
+
+class ElligatorError(ValueError):
+  """Point is incompatible with Elligator hashing"""
+
+def egcreate() -> Tuple[bytes, bytes]:
+  """
+  Create a random hidden key.
+  - Compatible with all of Ed25519, Curve25519 and Elligator2
+  - 254 bits of entropy (253 for Curve25519)
+
+  :returns: (hidden, edsk)
+  """
+  while True:
+    # Try until successful, half of our attempts should fail
+    with suppress(ElligatorError):
+      edsk = token_bytes(32)
+      return eghide(edsk), edsk
+
+def eghide(edsk) -> bytes:
+  """
+  Convert Ed25519 secret key into a random-looking 32-byte string.
+  - Deterministic, depends only on edsk
+
+  :raises ElligatorError: if the key is incompatible with Elligator2
+  """
+  # Calculate a dirty public key
+  s = dirty_scalar(edsk)
+  sg = s % 8  # sub group
+  # Using dirty generator: s * D - sg * G =
+  # Using normal generator: (s - sg) * G + LO[sg] =
+  # A dirty point produced: standard edpk + random low-order point
+  P = (s - sg) * G + LO[sg]
+  if not is_hashable(P.mont): raise ElligatorError("The key cannot be Elligator hashed")
+  # Take two pseudorandom bits (custom prefix needed to keep k and signatures secure)
+  # sha512(...)[31] & 0xC0 and placing at the same location on the final hidden byte.
+  tweak = sha(b"DirtyElligator2:" + edsk) & 0b11 << 254
+  # Elligator 2 hash
+  elligator = fast_curve_to_hash(P.mont, P.is_negative).val
+  assert elligator & tweak == 0, "The elligator hash and the tweak should not overlap"
+  return tobytes(elligator ^ tweak)
+
+def egreveal(hidden) -> EdPoint:
+  """Convert the hidden string back to (a dirty) public key"""
+  elligator = toint(hidden) & (1 << 254) - 1
+  u, v = fast_hash_to_curve(fe(elligator))
+  P = EdPoint.from_mont(u, v.is_negative)
+  return P
+
+## Low level API follows
 
 # Curve25519 constant
 A = fe(486662)
@@ -84,57 +194,13 @@ def hash_to_curve(r: fe) -> Tuple[fe, fe]:
 # Computes the representative of a point, straight from the paper.
 def curve_to_hash(u: fe, v_is_negative: bool) -> fe:
   """Reference implementation of point to S"""
-  if not can_curve_to_hash(u):
+  if not is_hashable(u):
     raise ValueError('cannot curve to hash')
   sq1 = (-u / (non_square * (u+A))).sqrt
   sq2 = (-(u + A) / (non_square * u)).sqrt
   return sq2 if v_is_negative else sq1
 
 
-def can_curve_to_hash(u: fe) -> bool:
+def is_hashable(u: fe) -> bool:
   """Test if a point is hashable."""  # Straight from the paper.
   return u != -A and (-non_square * u * (u + A)).is_square
-
-
-def keyhash(pk: bytes) -> bytes:
-  """Convert a public key to obfuscated elligator2 hash."""
-  assert len(pk) == 32
-  # Curve25519 keys are 255 bits but only half of the values are valid
-  # curve points. More over, only 1/8 of those points are in the prime group,
-  # which is used by all standard operations and can be easily tested for.
-  #
-  # Elligator2 also rejects half of the keys that would otherwise be valid,
-  # requiring retried key generation until successful.
-
-  # store the v coordinate sign, despite that being unused and ignored in all
-  # Curve25519 operations, producing a 253 bit coding where the value of that
-  # sign changes the entire output. Even then the top two bits are always zero.
-  #
-  # To create pseudo-random strings, we need to inject three random bits,
-  # one as the sign before hashing and two afterwards on the output.
-  # These could also be used to carry information, if we had something
-  # random-like to carry. Ed25519 sign bit would be a prime candidate...
-  sign = bool(randbits(1))
-  r = fast_curve_to_hash(fe(int.from_bytes(pk, "little")), sign)
-  r.val ^= randbits(2) << 254  # Fill in the high bits
-  return bytes(r)
-
-
-def unhash(h: bytes) -> bytes:
-  """Convert an elligator2 hash back to Curve25519 pk."""
-  assert len(h) == 32
-  mask = (1 << 254) - 1  # The two highest bits are not used
-  r = fe(int.from_bytes(h, "little") & mask)
-  u, v = fast_hash_to_curve(r)  # The v and its sign are ignored
-  return bytes(u)
-
-
-def ishashable(pk: bytes) -> bool:
-  """
-  Test if a key can be mapped (need to generate another if not).
-  The key is assumed to be valid in Curve25519, not tested for.
-  """
-  # This is much faster than trying to run keyhash()
-  assert len(pk) == 32
-  u = int.from_bytes(pk, "little")
-  return can_curve_to_hash(fe(u))

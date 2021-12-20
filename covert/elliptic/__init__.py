@@ -14,9 +14,9 @@
 # Public symbols are imported here. These are very low level primitives.
 # Lower case constants are scalars (int or fe), upper case are EdPoints.
 
-from .ed import LO, ZERO, D, EdPoint, G, L, edsk_scalar
+from .ed import LO, ZERO, D, EdPoint, G, L, dirty_scalar, secret_scalar
 from .eddsa import ed_sign, ed_verify
-from .elligator import ishashable, keyhash, unhash
+from .elligator import ElligatorError, egcreate, eghide, egreveal
 from .scalar import fe, minus1, one, p, q, sqrtm1, zero
-from .util import clamp, tobytes, toint
+from .util import clamp, tobytes, toint, tointsign
 from .xeddsa import xed_sign, xed_verify

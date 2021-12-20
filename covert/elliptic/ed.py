@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import cached_property
 
 from .scalar import fe, minus1, one, p, q, sqrtm1, zero
-from .util import clamp, sha, tobytes, toint
+from .util import clamp, clamp_dirty, sha, tobytes, toint, tointsign
 
 # Ed25519 curve constant -x2 + y2 = 1 - d x2 y2
 d = fe(-121665) / fe(121666)
@@ -13,20 +13,22 @@ d = fe(-121665) / fe(121666)
 
 class EdPoint:
   @staticmethod
-  def from_xbytes(b) -> EdPoint:
+  def from_montbytes(b) -> EdPoint:
     """Convert from Curve25519 pk, using the high bit as x coordinate sign."""
-    val = toint(b)
-    sign = 1 << 255 & val
-    u = fe(val ^ sign)
+    u, sign = tointsign(b)
+    return EdPoint.from_mont(fe(u), sign)
+
+  @staticmethod
+  def from_mont(u: fe, edsign: bool) -> EdPoint:
+    """Convert from Curve25519 u coordinate and a sign for Ed25519"""
     y = (u - one) / (u + one)
-    return EdPoint.from_y(y, bool(sign))
+    return EdPoint.from_y(y, edsign)
 
   @staticmethod
   def from_bytes(b) -> EdPoint:
     """Read standard Ed25519 public key"""
-    val = toint(b)
-    sign = 1 << 255 & val
-    return EdPoint.from_y(fe(val ^ sign), bool(sign))
+    val, sign = tointsign(b)
+    return EdPoint.from_y(fe(val), sign)
 
   @staticmethod
   def from_y(y: fe, sign=False) -> EdPoint:
@@ -48,26 +50,26 @@ class EdPoint:
     self.T = T
     assert self.x * self.y == self.T / self.Z
 
-  def __repr__(self):
-    return f"EdPoint(\n  {self.X!r},\n  {self.Y!r},\n  {self.Z!r},\n  {self.T!r},\n)"
-
-  def __str__(self):
-    return bytes(self).hex()
-
-  def __bytes__(self):
-    return tobytes(self.y.val + (self.x.val & 1) * (1 << 255))
-
-  def __hash__(self): return self.Y.val   # Faster then truly unique values
+  def __repr__(self): return point_name(self)
+  def __str__(self): return bytes(self).hex()
+  def __bytes__(self): return tobytes(self.y.val + (self.x.val & 1) * (1 << 255))
+  def __hash__(self): return self.y.val
+  def __abs__(self): return -self if self.is_negative else self
 
   @cached_property
   def norm(self) -> EdPoint:
     """Return a normalized point, with Z=1."""
-    return EdPoint.from_y(self.y, self.sign)
+    return EdPoint.from_y(self.y, self.is_negative)
 
   @cached_property
-  def sign(self) -> bool:
-    """Return the sign of the x coordinate, aka the sign."""
+  def is_negative(self) -> bool:
+    """Return the parity of the x coordinate, aka the sign."""
     return bool(self.x.val & 1)
+
+  @cached_property
+  def undirty(self) -> EdPoint:
+    """Project a dirty point to its corresponding prime group point"""
+    return (self if self.subgroup == 0 else self - LO[self.subgroup]).norm
 
   @cached_property
   def subgroup(self) -> int:
@@ -126,19 +128,19 @@ class EdPoint:
     )
 
   @cached_property
-  def x25519(self) -> fe:
+  def mont(self) -> fe:
     """Convert the y coordinate into a Curve25519 u coordinate. sign is not included."""
-    return (one + self.Y) / (one - self.Y)
+    return (one + self.y) / (one - self.y)
 
   @cached_property
-  def xbytes(self) -> bytes:
-    """Provides a 32-byte X25519 compatible pk with sign on the high bit"""
-    return tobytes((self.sign << 255) + self.x25519.val)
+  def montbytes_sign(self) -> bytes:
+    """Provides a 32-byte CUrve25519 compatible pk with sign on the high bit"""
+    return tobytes((self.is_negative << 255) + self.mont.val)
 
   @cached_property
-  def xbytes_standard(self) -> bytes:
-    """Provides a 32-byte X25519 pk with zero high bit"""
-    return tobytes(self.x25519.val)
+  def montbytes(self) -> bytes:
+    """Provides a 32-byte Curve25519 pk with zero high bit"""
+    return tobytes(self.mont.val)
 
 # Neutral element
 ZERO = EdPoint(zero, one, one, zero)
@@ -156,8 +158,35 @@ LO_index = [(i * pow(q, -1, 8)) % 8 for i in range(8)]
 # Dirty generator (randomises subgroups when multiplied by 0..8*q but is compatible with G)
 D = G + LO[1]
 
-def edsk_scalar(edsk) -> int:
-  """Converts Ed25519 secret key bytes to a clamped scalar"""
+def secret_scalar(edsk) -> int:
+  """
+  Converts Ed25519 secret key bytes to a clamped scalar.
+
+  Note:
+    Public key is edsk_scalar(edsk) * G  (for both Edwards and Montgomery)
+    Curve25519 sk = tobytes(edsk_scalar(edsk))
+  """
   # Sodium concatenates the public key, making it 64 bytes
   if len(edsk) not in (32, 64): raise ValueError("Invalid length for edsk")
   return clamp(sha(edsk[:32]))
+
+def dirty_scalar(edsk) -> int:
+  """
+  Converts Ed25519 secret key bytes to a partially clamped scalar.
+
+  dirty_scalar(edsk) * D = standard public key + random low order point
+  """
+  # High bits set as usual but the three low bits are not cleared
+  if len(edsk) not in (32, 64): raise ValueError("Invalid length for edsk")
+  return clamp_dirty(sha(edsk[:32]))
+
+
+def point_name(P: EdPoint) -> str:
+  """Return variable names rather than xy coordinates for any constants defined here"""
+  for name, val in globals().items():
+    if isinstance(val, EdPoint) and P == val:
+      return name
+  for i, val in enumerate(LO):
+    if P == val:
+      return f"LO[{i}]"
+  return f"EdPoint.from_xy({P.x!r}, {P.y!r})"

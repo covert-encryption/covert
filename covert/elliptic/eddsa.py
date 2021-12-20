@@ -1,12 +1,12 @@
 import hashlib
 
-from .ed import EdPoint, G, edsk_scalar, q
+from .ed import EdPoint, G, q, secret_scalar
 from .util import sha, toint
 
 
 def ed_sign(edsk: bytes, msg: bytes) -> bytes:
   """Standard Ed25519 signature"""
-  a = edsk_scalar(edsk)
+  a = secret_scalar(edsk)
   prefix = hashlib.sha512(edsk).digest()[32:]
   A = a * G
   r = sha(prefix + msg) % q

@@ -19,6 +19,7 @@ q = 2**252 + 27742317777372353535851937790883648493
 class fe:
   """A prime field scalar modulo p = 2^255 - 19"""
   def __init__(self, x: int): self.val = x % p
+  def __hash__(self): return self.val
   def __repr__(self): return value_name(self)
   def __str__(self): return bytes(self).hex()
   def __bytes__(self): return self.val.to_bytes(32, 'little')

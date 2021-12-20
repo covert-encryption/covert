@@ -1,7 +1,7 @@
 from typing import Optional
 
-from .ed import EdPoint, G, edsk_scalar, q
-from .util import clamp, sha, tobytes, toint
+from .ed import EdPoint, G, q, secret_scalar
+from .util import clamp, sha, tobytes, toint, tointsign
 
 # Implements Signal's XEdDSA signature scheme XEd25519
 # https://signal.org/docs/specifications/xeddsa/
@@ -34,24 +34,27 @@ def xed_sign(sk: bytes, message: bytes, nonce: bytes) -> bytes:
   R = r * G
   # Calculate a signature
   h = hashn(bytes(R) + bytes(A) + message)
-  s = (r + h * a) % q | A.sign << 255  # Inject sign into bit 255
+  s = (r + h * a) % q | A.is_negative << 255  # Inject sign into bit 255
   return bytes(R) + tobytes(s)
 
 def xed_verify(pk: bytes, message: bytes, signature: bytes) -> None:
   if len(signature) != 64:
     raise ValueError("Invalid signature length")
-  A = EdPoint.from_xbytes(pk)
-  # The specs don't require this check (from_xbytes already raises if not on curve)
-  if A.is_low_order:
+  try:
+    A = EdPoint.from_montbytes(pk)
+    if A.is_low_order: raise ValueError
+  except ValueError:
     raise ValueError("Invalid public key provided")
-  R, s = EdPoint.from_bytes(signature[:32]), toint(signature[32:])
+  try:
+    R = EdPoint.from_bytes(signature[:32])
+    if R.is_low_order: raise ValueError
+  except ValueError:
+    raise ValueError("Invalid R point on signature")
+  s = toint(signature[32:])
   # Restore the sign of A from the high bit of s
-  sign = s & (1 << 255)
-  s ^= sign
+  s, sign = tointsign(s)
   if sign: A = -A
   # Verify the signature
-  if R.is_low_order:
-    raise ValueError("Invalid R point on signature")
   if s >= q:
     raise ValueError("Invalid s value on signature")
   h = hashn(bytes(R) + bytes(A) + message)

@@ -8,7 +8,7 @@ from urllib.request import urlopen
 import nacl.bindings as sodium
 
 from covert import bech, passphrase, sshkey, util
-from covert.elliptic import elligator
+from covert.elliptic import egcreate, egreveal
 
 
 def derive_symkey(nonce, local, remote):
@@ -25,19 +25,13 @@ class Key:
     self.comment = comment
     self.pkhash = pkhash
     anykey = sk or pk or edsk or edpk
-    # Restore pk from hashed format
+    # Restore edpk from hidden format
     if pkhash is not None:
-      if anykey:
-        raise ValueError("Invalid Key argument: pkhash cannot be combined with other keys")
-      pk = elligator.unhash(pkhash)
-    # Create elligator2-compatible keys if no parameters were given
+      if anykey: raise ValueError("Invalid Key argument: pkhash cannot be combined with other keys")
+      edpk = bytes(egreveal(pkhash).undirty)
+    # Create Ed/Mont/Elligator compatible keys if no parameters were given
     elif not anykey:
-      while True:
-        edpk, edsk = sodium.crypto_sign_keypair()
-        pk = sodium.crypto_sign_ed25519_pk_to_curve25519(edpk)
-        if elligator.ishashable(pk):
-          break  # 50 % should succeed
-      self.pkhash = elligator.keyhash(pk)
+      self.pkhash, edsk = egcreate()
     # Store each parameter and convert ed25519 keys to curve25519
     if edsk:
       self.edsk = bytes(edsk[:32])
