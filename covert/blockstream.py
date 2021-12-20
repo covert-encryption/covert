@@ -4,7 +4,6 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from hashlib import sha512
-from sys import stderr
 
 from nacl.exceptions import CryptoError
 

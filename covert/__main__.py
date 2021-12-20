@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import NoReturn
 import colorama
 import covert
 from covert.cli import main_benchmark, main_dec, main_enc
@@ -82,6 +83,12 @@ decargs = dict(
 
 benchargs = dict(debug='--debug'.split(),)
 
+# TODO: Put mode args and help here as well
+modes = {
+  "enc": main_enc,
+  "dec": main_dec,
+  "benchmark": main_benchmark,
+}
 
 def argparse():
   # Custom parsing due to argparse module's limitations
@@ -112,7 +119,7 @@ def argparse():
   else:
     sys.stderr.write(' 💣  Invalid or missing command (enc/dec/benchmark).\n')
     sys.exit(1)
-  
+
   aiter = iter(av[1:])
   longargs = [flag[1:] for switches in ad.values() for flag in switches if flag.startswith("--")]
   shortargs = [flag[1:] for switches in ad.values() for flag in switches if not flag.startswith("--")]
@@ -161,7 +168,21 @@ def argparse():
   return args
 
 
-def main():
+def main() -> NoReturn:
+  """
+  The main CLI entry point.
+
+  Consider calling covert.cli.main* or other modules directly if you use from Python code.
+
+  System exit codes:
+  * 0 The requested function was completed successfully
+  * 1 CLI argument error
+  * 2 I/O error (broken pipe, not other types currently)
+  * 10-99 Normal errors, authentication failures, corrupted data, ... (currently 10 for all)
+
+  :raises SystemExit: on normal exit or any expected error, including KeyboardInterrupt
+  :raises Exception: on unexpected error (report a bug), or on any error with `--debug`
+  """
   colorama.init()
   # CLI argument processing
   args = argparse()
@@ -173,31 +194,22 @@ def main():
   if args.outfile in args.files:
     raise ValueError('In-place operation is not supported, cannot use the same file as input and output.')
 
+  # Run the mode-specific main function
   if args.debug:
-    if args.mode == "enc":
-      return main_enc(args)
-    elif args.mode == "dec":
-      return main_dec(args)
-    elif args.mode == "benchmark":
-      return main_benchmark(args)
-    else:
-      raise Exception('This should not be reached')
+    modes[args.mode](args)  # --debug makes us not catch errors
+    sys.exit(0)
   try:
-    if args.mode == "enc":
-      return main_enc(args)
-    elif args.mode == "dec":
-      return main_dec(args)
-    elif args.mode == "benchmark":
-      return main_benchmark(args)
-    else:
-      raise Exception('This should not be reached')
+    modes[args.mode](args)  # Normal run
   except ValueError as e:
     sys.stderr.write(f"Error: {e}\n")
+    sys.exit(10)
   except BrokenPipeError:
     sys.stderr.write('I/O error (broken pipe)\n')
+    sys.exit(3)
   except KeyboardInterrupt:
     sys.stderr.write("Interrupted.\n")
-
+    sys.exit(2)
+  sys.exit(0)
 
 if __name__ == "__main__":
-  sys.exit(main() or 0)
+  main()
