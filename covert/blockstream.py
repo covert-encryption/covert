@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from hashlib import sha512
 from secrets import token_bytes
-from sys import stderr
 
 from nacl.exceptions import CryptoError
 
