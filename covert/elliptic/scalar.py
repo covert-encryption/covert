@@ -30,7 +30,7 @@ class fe:
     if not isinstance(other, fe): raise TypeError(f"Cannot compare fe with {other!r}")
     return self.val == other.val
 
-  def __abs__(self): return self if self.is_positive else -self
+  def __abs__(self): return -self if self.is_negative else self
   def __neg__(self): return fe(-self.val)
   def __add__(self, o: fe): return fe(self.val + o.val)
   def __sub__(self, o: fe): return fe(self.val - o.val)
@@ -50,9 +50,6 @@ class fe:
 
   @cached_property
   def inv(self) -> fe: return self**-1
-
-  @property  # Uses cache of is_negative!
-  def is_positive(self) -> bool: return not self.is_negative
 
   @cached_property
   def is_negative(self) -> bool: return self.val % p > p2

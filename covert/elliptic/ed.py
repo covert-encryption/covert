@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
+from typing import Optional
 
 from .scalar import fe, minus1, one, p, q, sqrtm1, zero
 from .util import clamp, clamp_dirty, sha, tobytes, toint, tointsign
@@ -12,6 +13,13 @@ d = fe(-121665) / fe(121666)
 # coordinates, with x = X/Z, y = Y/Z, x*y = T/Z
 
 class EdPoint:
+  def __init__(self, x: fe, y: fe, z: fe = one, t: Optional[fe] = None):
+    # Expand to projective coordinates for faster adds
+    self.X = x
+    self.Y = y
+    self.Z = z
+    self.T = x * y if t is None else t
+
   @staticmethod
   def from_montbytes(b) -> EdPoint:
     """Convert from Curve25519 pk, using the high bit as x coordinate sign."""
@@ -19,10 +27,10 @@ class EdPoint:
     return EdPoint.from_mont(fe(u), sign)
 
   @staticmethod
-  def from_mont(u: fe, edsign: bool) -> EdPoint:
+  def from_mont(u: fe, ednegative: bool) -> EdPoint:
     """Convert from Curve25519 u coordinate and a sign for Ed25519"""
-    y = (u - one) / (u + one)
-    return EdPoint.from_y(y, edsign)
+    y = u if u in (minus1, zero, one) else (u - one) / (u + one)
+    return EdPoint.from_y(y, ednegative)
 
   @staticmethod
   def from_bytes(b) -> EdPoint:
@@ -31,24 +39,28 @@ class EdPoint:
     return EdPoint.from_y(fe(val), sign)
 
   @staticmethod
-  def from_y(y: fe, sign=False) -> EdPoint:
-    # Recover x
-    x = ((y.sq - one) / (d * y.sq + one)).sqrt
-    if sign and x == zero:
-      raise ValueError(f"Ed25519 x is zero, cannot satisfy {sign=}")
-    if x.bit(0) != sign: x = -x
-    return EdPoint(x, y, one, x * y)
+  def from_y(y: fe, negative=False) -> EdPoint:
+    """Restore from a y coordinate and an is_negative flag"""
+    x2 = (y.sq - one) / (d * y.sq + one)
+    if not x2.is_square: raise ValueError("Not a curve point on Ed25519")
+    p = EdPoint(x2.sqrt, y)
+    return p if p.is_negative == negative else -p
 
-  @staticmethod
-  def from_xy(x: fe, y: fe) -> EdPoint:
-    return EdPoint(x, y, one, x * y)
+  @cached_property
+  def mont(self) -> fe:
+    """Convert the y coordinate into a Curve25519 u coordinate. sign is not included."""
+    if self.y in (minus1, zero, one): return self.y
+    return (one + self.y) / (one - self.y)
 
-  def __init__(self, X: fe, Y: fe, Z: fe, T: fe):
-    self.X = X
-    self.Y = Y
-    self.Z = Z
-    self.T = T
-    assert self.x * self.y == self.T / self.Z
+  @cached_property
+  def montbytes_sign(self) -> bytes:
+    """Provides a 32-byte CUrve25519 compatible pk with sign on the high bit"""
+    return tobytes((self.is_negative << 255) + self.mont.val)
+
+  @cached_property
+  def montbytes(self) -> bytes:
+    """Provides a 32-byte Curve25519 pk with zero high bit"""
+    return tobytes(self.mont.val)
 
   def __repr__(self): return point_name(self)
   def __str__(self): return bytes(self).hex()
@@ -64,7 +76,8 @@ class EdPoint:
   @cached_property
   def is_negative(self) -> bool:
     """Return the parity of the x coordinate, aka the sign."""
-    return bool(self.x.val & 1)
+    # self.x is zero only for ZERO and LO[4], and for the latter this returns True
+    return self.x.bit(0) if self.x.val else self.y.is_negative
 
   @cached_property
   def undirty(self) -> EdPoint:
@@ -127,23 +140,8 @@ class EdPoint:
       (self.Y * othr.Z - othr.Y * self.Z) == zero
     )
 
-  @cached_property
-  def mont(self) -> fe:
-    """Convert the y coordinate into a Curve25519 u coordinate. sign is not included."""
-    return (one + self.y) / (one - self.y)
-
-  @cached_property
-  def montbytes_sign(self) -> bytes:
-    """Provides a 32-byte CUrve25519 compatible pk with sign on the high bit"""
-    return tobytes((self.is_negative << 255) + self.mont.val)
-
-  @cached_property
-  def montbytes(self) -> bytes:
-    """Provides a 32-byte Curve25519 pk with zero high bit"""
-    return tobytes(self.mont.val)
-
 # Neutral element
-ZERO = EdPoint(zero, one, one, zero)
+ZERO = EdPoint(zero, one)
 
 # Base point (prime group generator)
 G = EdPoint.from_y(fe(4) / fe(5), False)
@@ -189,4 +187,4 @@ def point_name(P: EdPoint) -> str:
   for i, val in enumerate(LO):
     if P == val:
       return f"LO[{i}]"
-  return f"EdPoint.from_xy({P.x!r}, {P.y!r})"
+  return f"EdPoint({P.x!r}, {P.y!r})"
