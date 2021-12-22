@@ -3,7 +3,7 @@ from secrets import token_bytes
 
 import nacl.bindings as sodium
 
-from covert import pubkey, sign
+from covert import pubkey
 import pytest
 
 
@@ -69,43 +69,3 @@ def test_key_exchange():
   eph = pubkey.Key(pk=eph_pk)
   bob_key = pubkey.derive_symkey(nonce, bob, eph)
   assert alice_key == bob_key
-
-
-def test_inversion():
-  x = int.from_bytes(token_bytes(32), "little")
-  y = sign.modp_inv(x)
-  z = (x*y) % sign.p
-  assert z == 1
-
-
-def test_signing():
-  for i in range(100):
-    presk = token_bytes(32)
-    pk, sk = sodium.crypto_box_seed_keypair(presk)
-    sk = sk[:32]
-    assert sk.hex() == sha512(presk).digest()[:32].hex()
-    assert len(pk) == 32
-    edpk, edsk = sign.calculate_key_pair(presk)
-    edpk2 = sign.convert_mont(pk)
-    try:
-      sodium.crypto_sign_open(sodium.crypto_sign(b'', presk + edpk), edpk2)
-    except Exception:
-      # We got the sign flip the wrong way. No worries, just flip it!
-      edpk2 = (int.from_bytes(edpk2, 'little') ^ (1 << 255)).to_bytes(32, 'little')
-      sodium.crypto_sign_open(sodium.crypto_sign(b'', presk + edpk), edpk2)
-    assert edpk.hex() == edpk2.hex()
-    pk2 = sodium.crypto_sign_ed25519_pk_to_curve25519(edpk)
-    assert pk2.hex() == pk.hex()
-    sk2 = sodium.crypto_sign_ed25519_sk_to_curve25519(presk + edpk)
-    assert sk2.hex() == sign.clamp(sk).hex()
-
-
-def test_signature_high_level():
-  for i in range(100):
-    key = pubkey.Key()
-    pub = pubkey.Key(edpk=key.edpk)
-    blkhash = token_bytes(64)
-    # Sign & verify
-    signature = sign.signature(key, blkhash)
-    msg = sign.verify(pub, blkhash, signature)
-    assert msg == blkhash

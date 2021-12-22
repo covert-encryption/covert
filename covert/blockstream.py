@@ -4,11 +4,13 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from hashlib import sha512
+from secrets import token_bytes
 
 from nacl.exceptions import CryptoError
 
-from covert import chacha, pubkey, sign
+from covert import chacha, pubkey
 from covert.cryptoheader import Header, encrypt_header
+from covert.elliptic import xed_sign, xed_verify
 from covert.util import noncegen
 
 BS = (1 << 20) - 19  # The maximum block size to use
@@ -158,7 +160,7 @@ class BlockStream:
           a.signatures.append((False, key, 'Signature corrupted or data manipulated'))
           continue
         try:
-          sign.verify(key, self.blkhash, signature)
+          xed_verify(key.pk, self.blkhash, signature)
           a.signatures.append((True, key, 'Signature verified'))
         except CryptoError:
           a.signatures.append((False, key, 'Forged signature'))
@@ -242,7 +244,7 @@ def encrypt_file(auth, blockinput, a):
   a.filehash = blkhash
   # Add signature blocks
   for key in identities:
-    signature = sign.signature(key, blkhash)
+    signature = xed_sign(key.sk, blkhash, token_bytes(64))
     nsig = sha512(blkhash + key.pk).digest()[:12]
     ksig = blkhash[:32]
     yield chacha.encrypt(signature, None, nsig, ksig)

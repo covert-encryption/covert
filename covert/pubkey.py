@@ -7,7 +7,8 @@ from urllib.request import urlopen
 
 import nacl.bindings as sodium
 
-from covert import bech, elligator, passphrase, sshkey, util
+from covert import bech, passphrase, sshkey, util
+from covert.elliptic import egcreate, egreveal
 
 
 def derive_symkey(nonce, local, remote):
@@ -24,19 +25,13 @@ class Key:
     self.comment = comment
     self.pkhash = pkhash
     anykey = sk or pk or edsk or edpk
-    # Restore pk from hashed format
+    # Restore edpk from hidden format
     if pkhash is not None:
-      if anykey:
-        raise ValueError("Invalid Key argument: pkhash cannot be combined with other keys")
-      pk = elligator.unhash(pkhash)
-    # Create elligator2-compatible keys if no parameters were given
+      if anykey: raise ValueError("Invalid Key argument: pkhash cannot be combined with other keys")
+      edpk = bytes(egreveal(pkhash).undirty)
+    # Create Ed/Mont/Elligator compatible keys if no parameters were given
     elif not anykey:
-      while True:
-        edpk, edsk = sodium.crypto_sign_keypair()
-        pk = sodium.crypto_sign_ed25519_pk_to_curve25519(edpk)
-        if elligator.ishashable(pk):
-          break  # 50 % should succeed
-      self.pkhash = elligator.keyhash(pk)
+      self.pkhash, edsk = egcreate()
     # Store each parameter and convert ed25519 keys to curve25519
     if edsk:
       self.edsk = bytes(edsk[:32])
@@ -88,17 +83,17 @@ class Key:
 
   def _generate_public(self):
     """Convert secret keys to public"""
+    if self.edsk:
+      edsk_hashed = self.sk
+      edpk_conv = sodium.crypto_scalarmult_ed25519_base(edsk_hashed)
+      if self.edpk and self.edpk != edpk_conv:
+        raise ValueError(f"Secret and public key mismatch\n  {self.edpk.hex()}\n  {edpk_conv.hex()}")
+      self.edpk = edpk_conv
     if self.sk:
       pk_conv = sodium.crypto_scalarmult_base(self.sk)
       if self.pk and self.pk != pk_conv:
         raise ValueError("Secret and public key mismatch")
       self.pk = pk_conv
-    if self.edsk:
-      edsk_hashed = self.sk
-      edpk_conv = sodium.crypto_scalarmult_ed25519_base(edsk_hashed)
-      if self.edpk and self.edpk != edpk_conv:
-        raise ValueError("Secret and public key mismatch")
-      self.edpk = edpk_conv
 
   def _validate(self):
     """Test if the keypairs work correctly"""
