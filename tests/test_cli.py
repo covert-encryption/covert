@@ -111,9 +111,11 @@ def test_end_to_end_multiple(covert, tmp_path):
 def test_end_to_end_github(covert, tmp_path, mocker):
   # Enable full status messages
   mocker.patch("sys.stderr.isatty", return_value=True)
-  # Fake web requests unless COVERT_TEST_GITHUB=1 was set (don't wanna 'call home' without permission)
+  # Fake web requests unless COVERT_TEST_GITHUB=1 is set (don't wanna 'call home' without permission)
   allow_network = os.environ.get("COVERT_TEST_GITHUB") == "1"
-  if not allow_network:
+  if allow_network:
+    m = mocker.spy("covert.pubkey.urlopen")
+  else:
     class FakeResponse:
       def __enter__(self): return self
       def __exit__(self, *exc): pass
@@ -127,8 +129,7 @@ def test_end_to_end_github(covert, tmp_path, mocker):
   assert not cap.out
   assert "4 📄 foo.txt" in cap.err
   assert "covert-encryption@github" in cap.err
-  if not allow_network:
-    m.assert_any_call("https://github.com/covert-encryption.keys")
+  m.assert_any_call("https://github.com/covert-encryption.keys")
 
 
 def test_end_to_end_shortargs_armored(covert, tmp_path):
