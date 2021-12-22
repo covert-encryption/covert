@@ -213,3 +213,7 @@ def test_errors(covert):
   cap = covert("enc", "-r", "tests/keys/ssh_ed25519.pub", exitcode=10)
   assert not cap.out
   assert "Unrecognized recipient string. Use a keyfile by -R tests/keys/ssh_ed25519.pub" in cap.err
+
+  cap = covert("enc", "-r", "not-a-file-either", exitcode=10)
+  assert not cap.out
+  assert "Unrecognized key not-a-file-either" in cap.err
