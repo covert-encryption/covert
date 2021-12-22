@@ -1,3 +1,4 @@
+import os
 import pytest
 import sys
 from covert.__main__ import argparse, main
@@ -107,6 +108,29 @@ def test_end_to_end_multiple(covert, tmp_path):
   assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
 
 
+def test_end_to_end_github(covert, tmp_path, mocker):
+  # Enable full status messages
+  mocker.patch("sys.stderr.isatty", return_value=True)
+  # Fake web requests unless COVERT_TEST_GITHUB=1 was set (don't wanna 'call home' without permission)
+  allow_network = os.environ.get("COVERT_TEST_GITHUB") == "1"
+  if not allow_network:
+    class FakeResponse:
+      def __enter__(self): return self
+      def __exit__(self, *exc): pass
+      def read(self):
+        with open("tests/keys/ssh_ed25519.pub", "rb") as f:
+          return f.read()
+    m = mocker.patch("covert.pubkey.urlopen", return_value=FakeResponse())
+
+  outfname = tmp_path / "crypto.covert"
+  cap = covert("enc", "-R", "github:covert-encryption", "--out", outfname, "tests/data/foo.txt")
+  assert not cap.out
+  assert "4 📄 foo.txt" in cap.err
+  assert "covert-encryption@github" in cap.err
+  if not allow_network:
+    m.assert_any_call("https://github.com/covert-encryption.keys")
+
+
 def test_end_to_end_shortargs_armored(covert, tmp_path):
   fname = tmp_path / "crypto.covert"
 
@@ -177,3 +201,14 @@ def test_errors(covert):
   cap = covert("-o", exitcode=1)
   assert not cap.out
   assert "Invalid or missing command" in cap.err
+
+  # FIXME: These should probably have status code 1 like the other argument errors do
+  # Needs more exception types to implement such distinction.
+
+  cap = covert("enc", "-r", "github:covert-encryption", exitcode=10)
+  assert not cap.out
+  assert "Unrecognized recipient string. Download a key from Github by -R github:covert-encryption" in cap.err
+
+  cap = covert("enc", "-r", "tests/keys/ssh_ed25519.pub", exitcode=10)
+  assert not cap.out
+  assert "Unrecognized recipient string. Use a keyfile by -R tests/keys/ssh_ed25519.pub" in cap.err
