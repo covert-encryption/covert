@@ -144,7 +144,9 @@ def main_enc(args):
       try:
         recipients.append(pubkey.decode_pk(keystr))
       except ValueError as e:
-        if os.path.isfile(keystr):
+        if keystr.startswith("github:"):
+          raise ValueError(f"Unrecognized recipient string. Download a key from Github by -R {keystr}")
+        elif os.path.isfile(keystr):
           raise ValueError(f"Unrecognized recipient string. Use a keyfile by -R {keystr}")
         raise
     for fn in args.recipfiles:
