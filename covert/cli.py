@@ -316,7 +316,7 @@ def main_benchmark(args):
   ciphertext = mmap.mmap(-1, size)
   ciphertext[:] = bytes(size)
 
-  rounds = 5
+  rounds = 3
   enctotal = dectotal = 0
   for i in range(rounds):
     print("ENC", end="", flush=True)
