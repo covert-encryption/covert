@@ -1,6 +1,8 @@
 import pytest
 import sys
 from covert.__main__ import argparse, main
+from covert import passphrase
+
 
 def test_argparser(capsys):
   # Correct but complex arguments
@@ -49,8 +51,13 @@ def covert(capsys):
     if args and args[0] == "covert":
       raise ValueError("Only arguments please, no 'covert' in the beginning")
     sys.argv = [str(arg) for arg in ("covert", *args)]
-    with pytest.raises(SystemExit) as exc:
-      main()
+    a2limit = passphrase.ARGON2_MEMLIMIT
+    passphrase.ARGON2_MEMLIMIT = 1 << 20  # Make tests run faster
+    try:
+      with pytest.raises(SystemExit) as exc:
+        main()
+    finally:
+      passphrase.ARGON2_MEMLIMIT = a2limit  # Restore regular value for other tests
     assert exc.value.code == exitcode, f"Was expecting {exitcode=} but Covert did sys.exit({exc.value.code})"
     return capsys.readouterr()
   return run_main
@@ -135,7 +142,7 @@ def test_end_to_end_armormaxsize(covert, tmp_path):
   assert not cap.out
   assert "32,505,856 📄 test.dat" in cap.err
 
-  # Decrypt crypto.covert with passphrase
+  # Decrypt crypto.covert to check the file list
   cap = covert("-di", "tests/keys/ssh_ed25519", outfname)
   assert not cap.out
   assert "32,505,856 📄 test.dat" in cap.err
@@ -170,8 +177,13 @@ def test_end_to_end_edit(covert, tmp_path, mocker):
   assert not cap.out
   assert "foo" in cap.err
 
-  mocker.patch("covert.tty.editor", return_value="edited message")
+  editor = mocker.patch("covert.tty.editor", return_value="added message")
   cap = covert("edit", fname)
+  editor.assert_called_once_with()
+
+  editor = mocker.patch("covert.tty.editor", return_value="edited message")
+  cap = covert("edit", fname)
+  editor.assert_called_once_with("added message")
 
   # Decrypt
   cap = covert("dec", fname, "-o", tmp_path)

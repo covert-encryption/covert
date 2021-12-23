@@ -11,7 +11,7 @@ from covert.tty import fullscreen
 from covert.wordlist import words
 
 MINLEN = 8  # Bytes, not characters
-
+ARGON2_MEMLIMIT = 1 << 28  # Bytes (libsodium), as opposed to KiB (other libraries)
 
 def generate(n=4, sep=""):
   """Generate a password of random words without repeating any word."""
@@ -51,7 +51,7 @@ def _argon2(outlen, passwd, salt, ops):
     passwd=passwd,
     salt=salt,
     opslimit=ops,
-    memlimit=1 << 28,
+    memlimit=ARGON2_MEMLIMIT,
     alg=sodium.crypto_pwhash_ALG_ARGON2ID13,
   )
 
