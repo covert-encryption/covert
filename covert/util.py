@@ -1,4 +1,5 @@
 import platform
+import re
 import unicodedata
 from base64 import b64decode, b64encode
 from math import log
@@ -7,9 +8,7 @@ from secrets import choice, token_bytes
 ARMOR_MAX_SINGLELINE = 4000  # Safe limit for line input, where 4096 may be the limit
 ARMOR_MAX_SIZE = 32 << 20  # If output is a file (limit our memory usage)
 TTY_MAX_SIZE = 100 << 10  # If output is a tty (limit too lengthy spam)
-B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 IS_APPLE = platform.system() == "Darwin"
-
 
 def armor_decode(data: str) -> bytes:
   """Base64 decode."""
@@ -22,16 +21,17 @@ def armor_decode(data: str) -> bytes:
   # Empty input means empty output (will cause an error elsewhere)
   if not lines:
     return b''
-  # Verify all lines
+  # Verify charset on all lines
+  r = re.compile(f"^[A-Za-z0-9+/]+$")
   for i, line in enumerate(lines):
-    if any(ch not in B64_ALPHABET for ch in line):
+    if not r.match(line):
       raise ValueError(f"Invalid armored encoding: unrecognized data on line {i + 1}")
   # Verify line lengths
   l = len(lines[0])
   for i, line in enumerate(lines[:-1]):
-    l2 = len(line)
-    if l2 < 76 or l2 % 4 or l2 != l:
-      raise ValueError(f"Invalid armored encoding: length {l2} of line {i + 1} is invalid")
+      l2 = len(line)
+      if l2 < 76 or l2 % 4 or l2 != l:
+        raise ValueError(f"Invalid armored encoding: length {l2} of line {i + 1} is invalid")
   data = "".join(lines)
   padding = -len(data) % 4
   if padding == 3:
