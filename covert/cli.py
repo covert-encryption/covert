@@ -235,18 +235,17 @@ def main_enc(args):
       if args.paste:
         pyperclip.copy(f"```\n{data}\n```\n")
         return
-      with realoutf:
-        pretty = realoutf.isatty()
+      pretty = realoutf.isatty()
+      if pretty:
+        sys.stderr.write("\x1B[1;30m```\x1B[0;34m\n")
+        sys.stderr.flush()
+      try:
+        realoutf.write(f"{data}\n".encode())
+        realoutf.flush()
+      finally:
         if pretty:
-          sys.stderr.write("\x1B[1;30m```\x1B[0;34m\n")
+          sys.stderr.write("\x1B[1;30m```\x1B[0m\n")
           sys.stderr.flush()
-        try:
-          realoutf.write(f"{data}\n".encode())
-          realoutf.flush()
-        finally:
-          if pretty:
-            sys.stderr.write("\x1B[1;30m```\x1B[0m\n")
-            sys.stderr.flush()
 
 
 def main_dec(args):
@@ -259,7 +258,14 @@ def main_dec(args):
   identities = list(sorted(identities, key=str))
   infile = open(args.files[0], "rb") if args.files else sys.stdin.buffer
   # If ASCII armored or TTY, read all input immediately (assumed to be short enough)
-  total_size = os.path.getsize(args.files[0]) if args.files else 0
+
+  # FIXME: For stdin the size is set to 50 so we try to read all of it (even if from a pipe),
+  # so that armoring can work. But this breaks pipe streaming of large files that cannot
+  # fit in RAM and tries to armor-decode very large files too. Needs to be fixed by
+  # attempting to read some to determine whether the input is small enough, and if not,
+  # use the covert.archive.CombinedIO object to consume the buffer already read and then
+  # resume streaming.
+  total_size = os.path.getsize(args.files[0]) if args.files else 50
   if infile.isatty():
     data = util.armor_decode(pyperclip.paste() if args.paste else tty.read_hidden("Encrypted message"))
     if not data:
@@ -300,10 +306,14 @@ def main_dec(args):
 
 def main_edit(args):
   if len(args.files) != 1:
-    raise ValueError("Edit mode requires name of one encrypted file to edit.")
+    raise ValueError("Edit mode requires an encrypted archive filename (or '-' to use stdio).")
+  fname = args.files[0]
   # Read all of input file (or stdin) to RAM
-  with open(args.files[0], "rb") as infile:
-    data = infile.read()
+  if fname is True:
+    data = sys.stdin.buffer.read()
+  else:
+    with open(fname, "rb") as f:
+      data = f.read()
   try:
     infile = BytesIO(util.armor_decode(data.decode()))
     args.armor = True
@@ -329,10 +339,19 @@ def main_edit(args):
   a.reset()
   a.fds = [BytesIO(f.data) for f in a.flist]
   a.random_padding()
-  # Encrypt another file with the new contents
-  with open(args.files[0], "wb") as outf:
-    for block in encrypt_file((False, [pwhash], [], []), a.encode, a):
-      outf.write(block)
+  # Encrypt in RAM...
+  out = bytearray()
+  for block in encrypt_file((False, [pwhash], [], []), a.encode, a):
+    out += block
+  # Preserve armoring if the input was armored
+  if args.armor:
+    out = f"{util.armor_encode(out)}\n".encode()
+  # Finally write output / replace the file
+  if fname is True:
+    sys.stdout.buffer.write(out)
+  else:
+    with open(fname, "wb") as f:
+      f.write(out)
 
 
 def main_benchmark(args):

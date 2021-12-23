@@ -1,7 +1,10 @@
-import pytest
 import sys
-from covert.__main__ import argparse, main
+from io import BytesIO, TextIOWrapper
+
+import pytest
+
 from covert import passphrase
+from covert.__main__ import argparse, main
 
 
 def test_argparser(capsys):
@@ -46,18 +49,15 @@ def test_argparser(capsys):
 
 # A fixture to run covert more easily, checks exitcode and returns its output
 @pytest.fixture
-def covert(capsys):
-  def run_main(*args, exitcode=0):
+def covert(monkeypatch, capsys):
+  def run_main(*args, stdin="", exitcode=0):
     if args and args[0] == "covert":
       raise ValueError("Only arguments please, no 'covert' in the beginning")
     sys.argv = [str(arg) for arg in ("covert", *args)]
-    a2limit = passphrase.ARGON2_MEMLIMIT
-    passphrase.ARGON2_MEMLIMIT = 1 << 20  # Make tests run faster
-    try:
-      with pytest.raises(SystemExit) as exc:
-        main()
-    finally:
-      passphrase.ARGON2_MEMLIMIT = a2limit  # Restore regular value for other tests
+    monkeypatch.setattr("sys.stdin", TextIOWrapper(BytesIO(stdin.encode())))  # Inject stdin
+    monkeypatch.setattr("covert.passphrase.ARGON2_MEMLIMIT", 1 << 20)  # Gotta go faster
+    with pytest.raises(SystemExit) as exc:
+      main()
     assert exc.value.code == exitcode, f"Was expecting {exitcode=} but Covert did sys.exit({exc.value.code})"
     return capsys.readouterr()
   return run_main
@@ -193,6 +193,24 @@ def test_end_to_end_edit(covert, tmp_path, mocker):
   with open(tmp_path / "data" / "foo.txt", "rb") as f:
     data = f.read()
   assert data == b"test"
+
+
+def test_end_to_end_edit_armored_stdio(covert, mocker, monkeypatch):
+  mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Encrypt only a message into crypto.cover
+  cap = covert("enc", "-a", stdin="original message")
+  assert cap.out and cap.out.isascii()
+
+  editor = mocker.patch("covert.tty.editor", return_value="edited message")
+  cap = covert("edit", "-", "--debug", stdin=cap.out)
+  assert cap.out and cap.out.isascii()
+  assert not cap.err
+  editor.assert_called_once_with("original message")
+  print(cap.out)
+  # Decrypt
+  cap = covert("dec", "--password", "verytestysecret", "--debug", stdin=cap.out)
+  assert "edited message" in cap.out
 
 
 def test_errors(covert):
