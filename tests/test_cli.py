@@ -221,20 +221,23 @@ def test_end_to_end_edit(covert, tmp_path, mocker):
 
 
 def test_end_to_end_edit_armored_stdio(covert, mocker, monkeypatch):
+  """echo original message | covert enc | covert edit - | covert dec"""
+  # Would ask for passphrase and new message on TTY despite stdin and stdout being piped
   mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
 
-  # Encrypt only a message into crypto.cover
+  # Encrypt a message
   cap = covert("enc", "-a", stdin="original message")
   assert cap.out and cap.out.isascii()
 
+  # Edit the message stdio
   editor = mocker.patch("covert.tty.editor", return_value="edited message")
-  cap = covert("edit", "-", "--debug", stdin=cap.out)
+  cap = covert("edit", "-", stdin=cap.out)
   assert cap.out and cap.out.isascii()
   assert not cap.err
   editor.assert_called_once_with("original message")
-  print(cap.out)
+
   # Decrypt
-  cap = covert("dec", "--password", "verytestysecret", "--debug", stdin=cap.out)
+  cap = covert("dec", "--password", "verytestysecret", stdin=cap.out)
   assert "edited message" in cap.out
 
 
