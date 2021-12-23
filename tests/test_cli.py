@@ -161,6 +161,28 @@ def test_end_to_end_large_file(covert, tmp_path):
   assert "The data is too large for --armor." in cap.err
 
 
+def test_end_to_end_edit(covert, tmp_path, mocker):
+  fname = tmp_path / "crypto.covert"
+  mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Encrypt data/foo.txt into crypto.covert
+  cap = covert("enc", "tests/data", "-o", fname)
+  assert not cap.out
+  assert "foo" in cap.err
+
+  mocker.patch("covert.tty.editor", return_value="edited message")
+  cap = covert("edit", fname)
+
+  # Decrypt
+  cap = covert("dec", fname, "-o", tmp_path)
+  assert "edited message" in cap.out
+  assert "foo.txt" in cap.err
+  # Check the file just extracted
+  with open(tmp_path / "data" / "foo.txt", "rb") as f:
+    data = f.read()
+  assert data == b"test"
+
+
 def test_errors(covert):
   cap = covert()
   assert "Usage:" in cap.out
