@@ -70,18 +70,23 @@ class Stage(IntEnum):
 class Archive:
 
   def __init__(self):
-    self.stage = Stage.INDEX
-    self.extrasize = 0
-    self.pos = 0
     self.index = {}
-    self.format = None
-    self.prevfile = None
     self.flist = []
+    self.reset()
+
+  def reset(self):
+    """Prepare for another decryption/encryption but keep the index."""
+    self.stage = Stage.INDEX
+    self.format = None
+    self.pos = 0
+    self.prevfile = None
     self.fidx = None
     self.fpos = None
+    self.extrasize = 0
     self.padding = 0
-    self.buffer = bytes()
     self.nextfilecb = None
+    self.buffer = bytes()
+
 
   @property
   def file(self):
