@@ -29,9 +29,9 @@ def armor_decode(data: str) -> bytes:
   # Verify line lengths
   l = len(lines[0])
   for i, line in enumerate(lines[:-1]):
-      l2 = len(line)
-      if l2 < 76 or l2 % 4 or l2 != l:
-        raise ValueError(f"Invalid armored encoding: length {l2} of line {i + 1} is invalid")
+    l2 = len(line)
+    if l2 < 76 or l2 % 4 or l2 != l:
+      raise ValueError(f"Invalid armored encoding: length {l2} of line {i + 1} is invalid")
   data = "".join(lines)
   padding = -len(data) % 4
   if padding == 3:
