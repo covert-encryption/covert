@@ -1,7 +1,12 @@
 import os
-import pytest
 import sys
+from io import BytesIO, TextIOWrapper
+
+import pytest
+
+from covert import passphrase
 from covert.__main__ import argparse, main
+
 
 def test_argparser(capsys):
   # Correct but complex arguments
@@ -45,11 +50,13 @@ def test_argparser(capsys):
 
 # A fixture to run covert more easily, checks exitcode and returns its output
 @pytest.fixture
-def covert(capsys):
-  def run_main(*args, exitcode=0):
+def covert(monkeypatch, capsys):
+  def run_main(*args, stdin="", exitcode=0):
     if args and args[0] == "covert":
       raise ValueError("Only arguments please, no 'covert' in the beginning")
     sys.argv = [str(arg) for arg in ("covert", *args)]
+    monkeypatch.setattr("sys.stdin", TextIOWrapper(BytesIO(stdin.encode())))  # Inject stdin
+    monkeypatch.setattr("covert.passphrase.ARGON2_MEMLIMIT", 1 << 20)  # Gotta go faster
     with pytest.raises(SystemExit) as exc:
       main()
     assert exc.value.code == exitcode, f"Was expecting {exitcode=} but Covert did sys.exit({exc.value.code})"
@@ -160,7 +167,7 @@ def test_end_to_end_armormaxsize(covert, tmp_path):
   assert not cap.out
   assert "32,505,856 📄 test.dat" in cap.err
 
-  # Decrypt crypto.covert with passphrase
+  # Decrypt crypto.covert to check the file list
   cap = covert("-di", "tests/keys/ssh_ed25519", outfname)
   assert not cap.out
   assert "32,505,856 📄 test.dat" in cap.err
@@ -184,6 +191,54 @@ def test_end_to_end_large_file(covert, tmp_path):
   cap = covert("-eaRo", "tests/keys/ssh_ed25519.pub", outfname, fname, exitcode=10)
   assert not cap.out
   assert "The data is too large for --armor." in cap.err
+
+
+def test_end_to_end_edit(covert, tmp_path, mocker):
+  fname = tmp_path / "crypto.covert"
+  mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Encrypt data/foo.txt into crypto.covert
+  cap = covert("enc", "tests/data", "-o", fname)
+  assert not cap.out
+  assert "foo" in cap.err
+
+  editor = mocker.patch("covert.tty.editor", return_value="added message")
+  cap = covert("edit", fname)
+  editor.assert_called_once_with()
+
+  editor = mocker.patch("covert.tty.editor", return_value="edited message")
+  cap = covert("edit", fname)
+  editor.assert_called_once_with("added message")
+
+  # Decrypt
+  cap = covert("dec", fname, "-o", tmp_path)
+  assert "edited message" in cap.out
+  assert "foo.txt" in cap.err
+  # Check the file just extracted
+  with open(tmp_path / "data" / "foo.txt", "rb") as f:
+    data = f.read()
+  assert data == b"test"
+
+
+def test_end_to_end_edit_armored_stdio(covert, mocker, monkeypatch):
+  """echo original message | covert enc | covert edit - | covert dec"""
+  # Would ask for passphrase and new message on TTY despite stdin and stdout being piped
+  mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Encrypt a message
+  cap = covert("enc", "-a", stdin="original message")
+  assert cap.out and cap.out.isascii()
+
+  # Edit the message stdio
+  editor = mocker.patch("covert.tty.editor", return_value="edited message")
+  cap = covert("edit", "-", stdin=cap.out)
+  assert cap.out and cap.out.isascii()
+  assert not cap.err
+  editor.assert_called_once_with("original message")
+
+  # Decrypt
+  cap = covert("dec", "--password", "verytestysecret", stdin=cap.out)
+  assert "edited message" in cap.out
 
 
 def test_errors(covert):

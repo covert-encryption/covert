@@ -3,12 +3,13 @@ import sys
 from typing import NoReturn
 import colorama
 import covert
-from covert.cli import main_benchmark, main_dec, main_enc
+from covert.cli import main_benchmark, main_dec, main_edit, main_enc
 
 hdrhelp = """\
 Usage:
   covert enc [files] [recipients] [signatures] [-A | -o unsuspicious.dat [-a]]
   covert dec [-A | unsuspicious.dat] [-i id_ed25519] [-o filesfolder]
+  covert edit unsuspicious.dat — change text in a passphrase-protected archive
   covert benchmark
 
 Note: covert enc/dec without arguments ask for password and message. Files and
@@ -81,12 +82,14 @@ decargs = dict(
   debug='--debug'.split(),
 )
 
+editargs = dict(debug='--debug'.split(),)
 benchargs = dict(debug='--debug'.split(),)
 
 # TODO: Put mode args and help here as well
 modes = {
   "enc": main_enc,
   "dec": main_dec,
+  "edit": main_edit,
   "benchmark": main_benchmark,
 }
 
@@ -114,10 +117,12 @@ def argparse():
     args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
   elif av[0] in ('dec', 'decrypt', '-d'):
     args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
+  elif av[0] in ('edit'):
+    args.mode, ad, modehelp = 'edit', editargs, f"{hdrhelp}"
   elif av[0] in ('bench', 'benchmark'):
     args.mode, ad, modehelp = 'benchmark', benchargs, f"{hdrhelp}"
   else:
-    sys.stderr.write(' 💣  Invalid or missing command (enc/dec/benchmark).\n')
+    sys.stderr.write(' 💣  Invalid or missing command (enc/dec/edit/benchmark).\n')
     sys.exit(1)
 
   aiter = iter(av[1:])
