@@ -50,6 +50,11 @@ def test_mont():
   Led = [EdPoint.from_mont(mont.scalarmult(s, L), s >= 4) for s in range(8)]
   assert Led == LO
 
+  # Very special low order points
+  assert mont.scalarmult(11, ZERO) == ZERO.mont
+  assert mont.scalarmult(3, LO[4]) == LO[4].mont
+  assert mont.scalarmult(4, LO[4]) == ZERO.mont
+
   # Any point times 8q should be point at infinity (ZERO)
   assert mont.scalarmult(4 * q, 2 * D) == ZERO.mont
 
