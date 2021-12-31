@@ -63,6 +63,7 @@ from secrets import token_bytes
 from typing import Tuple
 
 from .ed import LO, EdPoint, G, dirty_scalar
+from .mont import A
 from .scalar import fe, one, p, sqrtm1, zero
 from .util import sha, tobytes, toint
 
@@ -99,10 +100,16 @@ def eghide(edsk) -> bytes:
   # A dirty point produced: standard edpk + random low-order point
   P = (s - sg) * G + LO[sg]
   if not is_hashable(P.mont): raise ElligatorError("The key cannot be Elligator hashed")
-  # Take two pseudorandom bits (custom prefix needed to keep k and signatures secure)
+  # Take two pseudorandom bits (custom prefix needed to keep s and signatures secure)
   # sha512(...)[31] & 0xC0 and placing at the same location on the final hidden byte.
   tweak = sha(b"DirtyElligator2:" + edsk) & 0b11 << 254
+
   # Elligator 2 hash
+  #
+  # Note: the random hashes lack one bit of entropy because only half of the possible
+  # points are created (because the high bit of the scalar is forced on) but for a given
+  # point it is not possible to test whether it could or could not be created. Adding a
+  # random sign bit instead would add to entropy but then the Ed25519 sign would be lost.
   elligator = fast_curve_to_hash(P.mont, P.is_negative).val
   assert elligator & tweak == 0, "The elligator hash and the tweak should not overlap"
   return tobytes(elligator ^ tweak)
@@ -115,9 +122,6 @@ def egreveal(hidden) -> EdPoint:
   return P
 
 ## Low level API follows
-
-# Curve25519 constant
-A = fe(486662)
 
 # Arbitrary non square, typically chosen to minimise computation.
 # 2 and sqrt(-1) both work fairly well, but 2 seems to be more popular.

@@ -6,8 +6,9 @@ from typing import Optional
 from .scalar import fe, minus1, one, p, q, sqrtm1, zero
 from .util import clamp, clamp_dirty, sha, tobytes, toint, tointsign
 
-# Ed25519 curve constant -x2 + y2 = 1 - d x2 y2
-d = fe(-121665) / fe(121666)
+# Twisted Edwards curve: a x2 + y2 = 1 + d x2 y2
+# Ed25519 constants:
+a, d = minus1, -fe(121665) / fe(121666)
 
 # Points are represented as tuples (X, Y, Z, T) of extended
 # coordinates, with x = X/Z, y = Y/Z, x*y = T/Z
@@ -29,8 +30,10 @@ class EdPoint:
   @staticmethod
   def from_mont(u: fe, ednegative: bool) -> EdPoint:
     """Convert from Curve25519 u coordinate and a sign for Ed25519"""
-    y = u if u in (minus1, zero, one) else (u - one) / (u + one)
-    return EdPoint.from_y(y, ednegative)
+    if u == minus1:
+      # Custom handling of two points with no birational mapping
+      return ZERO
+    return EdPoint.from_y((u - one) / (u + one), ednegative)
 
   @staticmethod
   def from_bytes(b) -> EdPoint:
@@ -49,7 +52,7 @@ class EdPoint:
   @cached_property
   def mont(self) -> fe:
     """Convert the y coordinate into a Curve25519 u coordinate. sign is not included."""
-    if self.y in (minus1, zero, one): return self.y
+    if self.y == one: return minus1
     return (one + self.y) / (one - self.y)
 
   @cached_property
@@ -64,7 +67,7 @@ class EdPoint:
 
   def __repr__(self): return point_name(self)
   def __str__(self): return bytes(self).hex()
-  def __bytes__(self): return tobytes(self.y.val + (self.x.val & 1) * (1 << 255))
+  def __bytes__(self): return tobytes(self.y.val + (self.is_negative << 255))
   def __hash__(self): return self.y.val
   def __abs__(self): return -self if self.is_negative else self
 

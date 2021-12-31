@@ -38,6 +38,33 @@ def test_ed():
   K = k * G
   assert bytes(K).hex() == edpk.hex()
 
+def test_mont():
+  assert mont.scalarmult(0, D.mont) == ZERO.mont
+  assert mont.scalarmult(1, D.mont) == D.mont
+
+  # Low order points
+  Lmont = [mont.scalarmult(s, L) for s in range(8)]
+  Lexpected = [ZERO.mont, L.mont, LO[2].mont, LO[3].mont, LO[4].mont, LO[3].mont, LO[2].mont, LO[1].mont]
+  assert Lmont == Lexpected
+
+  Led = [EdPoint.from_mont(mont.scalarmult(s, L), s >= 4) for s in range(8)]
+  assert Led == LO
+
+  # Any point times 8q should be point at infinity (ZERO)
+  assert mont.scalarmult(4 * q, 2 * D) == ZERO.mont
+
+  # Test v coordinate recovery
+  assert mont.v(fe(9)) == fe(14781619447589544791020593568409986887264606134616475288964881837755586237401)
+
+  with pytest.raises(ValueError) as exc:
+    mont.v(fe(2))
+  assert "not a valid point" in str(exc.value)
+
+  with pytest.raises(ValueError) as exc:
+    mont.v(ZERO.mont)
+  assert "point at infinity" in str(exc.value)
+
+
 def test_hashmap():
   # Just hitting the __hash__ functions
   assert len({fe(i * p) for i in range(2)}) == 1
