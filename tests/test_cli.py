@@ -290,11 +290,16 @@ def test_coverage(covert, tmp_path):
   assert "A file and message encryptor with strong anonymity" in cap.out
   assert not cap.err
 
-  cap = covert("-e", "1", "-z", exitcode=1)
+  cap = covert("-e", 1, "-z", exitcode=1)
   assert not cap.out
   assert "Unknown argument" in cap.err
-  
+
   with pytest.raises(ValueError):
     cap = covert("-e", "-o", "test.dat", "-o", "test2.dat", exitcode=1)
     assert not cap.out
     assert "Only one output file may be specified" in cap.err
+
+  with pytest.raises(ValueError):
+    cap = covert("-eaR", "tests/keys/ssh_ed25519.pub", fname, "-o", fname, exitcode=1)
+    assert not cap.out
+    assert "In-place operation is not supported" in cap.err
