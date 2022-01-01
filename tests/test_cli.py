@@ -272,3 +272,29 @@ def test_errors(covert):
   cap = covert("enc", "-r", "not-a-file-either", exitcode=10)
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
+
+def test_coverage(covert, tmp_path):
+  fname = tmp_path / "test.dat"
+  outfname = tmp_path / "crypto.covert"
+
+  # Write 10 MiB on test.dat
+  with open(f"{fname}", "wb") as f:
+    f.seek(10485760)
+    f.write(b"\0")
+  
+  cap = covert("-eaR", "tests/keys/ssh_ed25519.pub", fname, "-o", outfname, "--debug")
+  assert not cap.out
+  assert "10,485,761 📄 test.dat" in cap.err
+
+  cap = covert("-v")
+  assert "A file and message encryptor with strong anonymity" in cap.out
+  assert not cap.err
+
+  cap = covert("-e", "1", "-z", exitcode=1)
+  assert not cap.out
+  assert "Unknown argument" in cap.err
+
+  cap = covert("-e", "-o", "test.dat", "-o", "test2.dat", exitcode=1)
+  assert not cap.out
+  assert "Only one output file may be specified" in cap.err
+
