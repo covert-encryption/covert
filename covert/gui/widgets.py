@@ -17,18 +17,18 @@ class MethodsWidget(QWidget):
     self.layout.setContentsMargins(11, 11, 11, 11)
     if not (app.passwords or app.recipients):
       lock = QLabel()
-      lock.setPixmap(app.unlockicon)
+      lock.setPixmap(app.app.unlockicon)
       self.layout.addWidget(lock)
       self.layout.addWidget(QLabel(' wide-open – anyone can open the file'))
     else:
       lock = QLabel()
-      lock.setPixmap(app.lockicon)
+      lock.setPixmap(app.app.lockicon)
       self.layout.addWidget(lock)
       self.layout.addWidget(QLabel(' covert'))
     self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed))
     for p in app.passwords:
       key = QLabel()
-      key.setPixmap(app.keyicon)
+      key.setPixmap(app.app.keyicon)
       self.layout.addWidget(key)
     for k in app.recipients:
       key = QLabel()

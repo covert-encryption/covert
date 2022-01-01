@@ -5,27 +5,22 @@ from io import BytesIO
 from itertools import chain
 
 from PySide6.QtCore import QRect, QSize, Qt, Slot
-from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel
-from PySide6.QtWidgets import QApplication, QFileDialog, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QMenu, QMenuBar, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
+from PySide6.QtGui import QAction, QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QApplication, QFileDialog, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QMainWindow, QMenu, QMenuBar, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
 
 from covert import passphrase, pubkey, util
 from covert.archive import Archive
 from covert.blockstream import BlockStream, encrypt_file
-from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 from covert.gui.encrypt import AuthInput
 from covert.gui.util import datafile, setup_interrupt_handling
 from covert.gui.widgets import DecryptWidget, EncryptToolbar, MethodsWidget
+from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 
 
 class App(QApplication):
-
   def __init__(self):
-    QApplication.__init__(self, sys.argv)
-    self.recipients = set()
-    self.signatures = set()
-    self.identities = set()
-    self.passwords = set()
-    self.files = set()
+    QApplication.__init__(self, [])
+    setup_interrupt_handling()
 
     self.logo = QPixmap(datafile('logo.png'))
     self.newicon = QPixmap(datafile('icons8-new-document-48.png')).scaled(48, 48)
@@ -38,11 +33,62 @@ class App(QApplication):
     self.keyicon = QPixmap(datafile('icons8-key-48.png')).scaled(24, 24)
     self.pkicon = QPixmap(datafile('icons8-link-48.png')).scaled(24, 24)
     self.signicon = QPixmap(datafile('icons8-signing-a-document-48.png')).scaled(24, 24)
+
+    # Override CLI password asking with GUI version
+    passphrase.ask = self.askpass
+
     self.setApplicationName('Covert Encryption')
-    self.setObjectName('Covert')
-    setup_interrupt_handling()
-    self.window = MainWindow(self)
-    self.window.show()
+    self.setWindowIcon(self.logo)
+    self.windows = set()
+    self.new_window()
+
+  def askpass(self, prompt, create=False):
+    window = next(iter(self.windows))  # FIXME: Keep track of active mainwindow in case there are multiple
+    return QInputDialog.getText(window, "Covert Encryption", f"{prompt}:", QLineEdit.Password, "")
+
+  @Slot()
+  def new_window(self):
+    self.windows.add(MainWindow(self))
+
+class MainWindow(QMainWindow):
+  def __init__(self, app):
+    QMainWindow.__init__(self)
+    self.setWindowTitle("Covert Encryption")
+    self.app = app
+
+    # Menu
+    self.menu = self.menuBar()
+    self.file_menu = self.menu.addMenu("File")
+
+    new_action = QAction("&New Window", self)
+    new_action.setShortcut(QKeySequence.New)
+    new_action.triggered.connect(app.new_window)
+    self.file_menu.addAction(new_action)
+
+    new_action = QAction("Close Window", self)
+    new_action.setShortcut(QKeySequence.Close)
+    new_action.triggered.connect(self.close)
+    self.file_menu.addAction(new_action)
+
+    # Exit QAction
+    exit_action = QAction("E&xit", self)
+    exit_action.setShortcut(QKeySequence.Quit)
+    exit_action.triggered.connect(app.quit)
+    self.file_menu.addAction(exit_action)
+
+    # Status Bar
+    self.status = self.statusBar()
+    self.status.showMessage("")
+
+    self.recipients = set()
+    self.signatures = set()
+    self.identities = set()
+    self.passwords = set()
+    self.files = set()
+
+    self.window = MainView(self)
+    self.setCentralWidget(self.window)
+    self.show()
 
     self.update_encryption_views()
 
@@ -72,17 +118,17 @@ class App(QApplication):
       raise ValueError("Some recipients were discarded, can only have 20 recipients.")
     self.window.update_encryption_views()
 
-class MainWindow(QWidget):
+
+class MainView(QWidget):
 
   def __init__(self, app):
     QWidget.__init__(self)
-    QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(app.quit)
     self.app = app
     self.setGeometry(QRect(10, 10, 800, 600))
     self.logo = QLabel()
     self.logo.setAlignment(Qt.AlignTop)
     self.logo.setGeometry(QRect(0, 0, 128, 128))
-    self.logo.setPixmap(app.logo)
+    self.logo.setPixmap(app.app.logo)
     self.auth = AuthInput(app)
     self.decrauth = AuthDecr(app)
     self.decrauth.setVisible(False)
@@ -94,9 +140,9 @@ class MainWindow(QWidget):
     self.attachments.setModel(self.attmodel)
     self.attachments.setMaximumHeight(120)
     self.attachments.setWrapping(True)
-    self.newbutton = QPushButton(self.app.newicon, "&New Message")
-    self.pastebutton = QPushButton(self.app.pasteicon, "&Paste Armored")
-    self.openbutton = QPushButton(self.app.openicon, "&Open File")
+    self.newbutton = QPushButton(self.app.app.newicon, "&New Message")
+    self.pastebutton = QPushButton(self.app.app.pasteicon, "&Paste Armored")
+    self.openbutton = QPushButton(self.app.app.openicon, "&Open File")
     self.newbutton.setIconSize(QSize(48, 48))
     self.pastebutton.setIconSize(QSize(48, 48))
     self.openbutton.setIconSize(QSize(48, 48))
@@ -122,12 +168,6 @@ class MainWindow(QWidget):
     self.layout.addWidget(self.plaintext, 5, 0, 1, -1)
     self.layout.addWidget(self.attachments, 6, 0, 1, -1)
     self.layout.addWidget(EncryptToolbar(app), 7, 0, 1, -1)
-
-    # Override CLI password asking with GUI version
-    passphrase.ask = self.askpass
-
-  def askpass(self, prompt, create=False):
-    return QInputDialog.getText(self, "Covert Encryption", f"{prompt}:", QLineEdit.Password, "")
 
   def update_encryption_views(self):
     self.auth.siginput.setText(', '.join(str(k) for k in self.app.signatures) or "Anonymous (no signature)")
