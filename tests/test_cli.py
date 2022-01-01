@@ -293,7 +293,8 @@ def test_coverage(covert, tmp_path):
   cap = covert("-e", "1", "-z", exitcode=1)
   assert not cap.out
   assert "Unknown argument" in cap.err
-
-  cap = covert("-e", "-o", "test.dat", "-o", "test2.dat", exitcode=1)
-  assert not cap.out
-  assert "Only one output file may be specified" in cap.err
+  
+  with pytest.raises(ValueError):
+    cap = covert("-e", "-o", "test.dat", "-o", "test2.dat", exitcode=1)
+    assert not cap.out
+    assert "Only one output file may be specified" in cap.err
