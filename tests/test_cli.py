@@ -297,4 +297,3 @@ def test_coverage(covert, tmp_path):
   cap = covert("-e", "-o", "test.dat", "-o", "test2.dat", exitcode=1)
   assert not cap.out
   assert "Only one output file may be specified" in cap.err
-
