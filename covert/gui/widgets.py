@@ -130,6 +130,7 @@ class EncryptToolbar(QWidget):
     outfile.seek(0)
     data = util.armor_encode(outfile.read())
     QGuiApplication.clipboard().setText(f"```\n{data}\n```\n")
+    self.app.flash("Encrypted message copied to clipboard.")
 
   @Slot()
   def savecipher(self):
@@ -149,3 +150,4 @@ class EncryptToolbar(QWidget):
       return
     with open(name, 'wb') as f:
       self.app.encrypt(f)
+    self.app.flash(f"Encrypted message saved as {name}")

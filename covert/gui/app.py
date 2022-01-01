@@ -4,7 +4,7 @@ from contextlib import suppress
 from io import BytesIO
 from itertools import chain
 
-from PySide6.QtCore import QRect, QSize, Qt, Slot
+from PySide6.QtCore import QRect, QSize, QTimer, Qt, Slot
 from PySide6.QtGui import QAction, QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QApplication, QFileDialog, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QMainWindow, QMenu, QMenuBar, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
 
@@ -91,6 +91,10 @@ class MainWindow(QMainWindow):
     self.show()
 
     self.update_encryption_views()
+
+  def flash(self, message):
+    self.status.showMessage(message)
+    QTimer.singleShot(1500, lambda: self.status.showMessage(""))
 
   def encrypt(self, outfile):
     # Process the message, prune surrounding whitespace
