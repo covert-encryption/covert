@@ -273,7 +273,7 @@ def test_errors(covert):
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
 
-def test_coverage(covert, tmp_path):
+def test_coverage(covert, tmp_path, capsys):
   fname = tmp_path / "test.dat"
   outfname = tmp_path / "crypto.covert"
 
@@ -303,3 +303,10 @@ def test_coverage(covert, tmp_path):
     cap = covert("-eaR", "tests/keys/ssh_ed25519.pub", fname, "-o", fname, exitcode=1)
     assert not cap.out
     assert "In-place operation is not supported" in cap.err
+  
+  sys.argv = "covert enc --passphrase".split()
+  a = argparse()
+  assert a.askpass == 1
+  cap = capsys.readouterr()
+  assert not cap.out
+  assert not cap.err
