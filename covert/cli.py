@@ -203,51 +203,55 @@ def main_enc(args):
 
   a.nextfilecb = nextfile_callback
   # Main processing
-  with outf:
-    with tqdm(
-      total=a.total_size, delay=1.0, ncols=78, unit='B', unit_scale=True, bar_format="{l_bar}         {bar}{r_bar}"
-    ) as progress:
-      for block in encrypt_file((args.wideopen, pwhashes, recipients, signatures), a.encode, a):
-        progress.update(len(block))
-        outf.write(block)
-    # Pretty output printout
-    if sys.stderr.isatty():
-      # Print a list of files
-      lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
-      methods = "  ".join(
-        [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (numpasswd - len(vispw)) * ["🔑 <pw>"]
-      )
-      methods += f' 🔷 {a.filehash[:12].hex()}'
-      for id in signatures:
-        methods += f"  🖋️ {id}"
-      if methods:
-        lock += f"    {methods}"
-      if args.outfile:
-        lock += f"  💾 {args.outfile}\n"
-      elif args.paste:
-        lock += f"  📋 copied\n"
-      out = f"\n\x1B[1m{lock}\x1B[0m\n"
-      sys.stderr.write(out)
+  with tqdm(
+    total=a.total_size, delay=1.0, ncols=78, unit='B', unit_scale=True, bar_format="{l_bar}         {bar}{r_bar}"
+  ) as progress:
+    for block in encrypt_file((args.wideopen, pwhashes, recipients, signatures), a.encode, a):
+      progress.update(len(block))
+      outf.write(block)
+  # Pretty output printout
+  if sys.stderr.isatty():
+    # Print a list of files
+    lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
+    methods = "  ".join(
+      [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (numpasswd - len(vispw)) * ["🔑 <pw>"]
+    )
+    methods += f' 🔷 {a.filehash[:12].hex()}'
+    for id in signatures:
+      methods += f"  🖋️ {id}"
+    if methods:
+      lock += f"    {methods}"
+    if args.outfile:
+      lock += f"  💾 {args.outfile}\n"
+    elif args.paste:
+      lock += f"  📋 copied\n"
+    out = f"\n\x1B[1m{lock}\x1B[0m\n"
+    sys.stderr.write(out)
+    sys.stderr.flush()
+  if outf is not realoutf:
+    outf.seek(0)
+    data = outf.read()
+    data = util.armor_encode(data)
+  if outf is not realoutf:
+    if args.paste:
+      pyperclip.copy(f"```\n{data}\n```\n")
+      return
+    pretty = realoutf.isatty()
+    if pretty:
+      sys.stderr.write("\x1B[1;30m```\x1B[0;34m\n")
       sys.stderr.flush()
-    if outf is not realoutf:
-      outf.seek(0)
-      data = outf.read()
-      data = util.armor_encode(data)
-    if outf is not realoutf:
-      if args.paste:
-        pyperclip.copy(f"```\n{data}\n```\n")
-        return
-      pretty = realoutf.isatty()
+    try:
+      realoutf.write(f"{data}\n".encode())
+      realoutf.flush()
+    finally:
       if pretty:
-        sys.stderr.write("\x1B[1;30m```\x1B[0;34m\n")
+        sys.stderr.write("\x1B[1;30m```\x1B[0m\n")
         sys.stderr.flush()
-      try:
-        realoutf.write(f"{data}\n".encode())
-        realoutf.flush()
-      finally:
-        if pretty:
-          sys.stderr.write("\x1B[1;30m```\x1B[0m\n")
-          sys.stderr.flush()
+  # Not using `with outf` because closing stdout causes a lot of trouble and
+  # missing the close on a file when the CLI exits anyway is not dangerous.
+  # TODO: Delete the output file if any exception occurs.
+  if outf is not sys.stdout.buffer:
+    outf.close()
 
 
 def main_dec(args):

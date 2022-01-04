@@ -288,7 +288,7 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
   with open(f"{fname}", "wb") as f:
     f.seek(10485760)
     f.write(b"\0")
-  
+
   cap = covert("-eaR", "tests/keys/ssh_ed25519.pub", fname, "-o", outfname, "--debug")
   assert not cap.out
   assert "10,485,761 📄 test.dat" in cap.err
@@ -310,22 +310,21 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
     cap = covert("-eaR", "tests/keys/ssh_ed25519.pub", fname, "-o", fname, exitcode=1)
     assert not cap.out
     assert "In-place operation is not supported" in cap.err
-  
+
   sys.argv = "covert enc --passphrase".split()
   a = argparse()
   assert a.askpass == 1
   cap = capsys.readouterr()
   assert not cap.out
   assert not cap.err
-  
+
   mocker.patch("covert.passphrase.ask", side_effect=KeyboardInterrupt("Testing interrupt"))
   cap = covert("enc", exitcode=2)
   assert not cap.out
   assert "Interrupted." in cap.err
 
-  # Broken pipe error should generally occur on stdout write but we cannot patch that,
-  # so instead raise it at a higher level to cover the handling in __init__.main.
-  mocker.patch("covert.cli.main_enc", side_effect=BrokenPipeError())
+  # A typical case of Broken Pipe: the program being piped to exits and then stdout writes fail
+  mocker.patch("sys.stdout.buffer.write", side_effect=BrokenPipeError())
   cap = covert("-eR", "tests/keys/ssh_ed25519.pub", fname, exitcode=3)
   assert not cap.out
   assert "I/O error (broken pipe)" in cap.err
