@@ -93,15 +93,19 @@ modes = {
   "benchmark": main_benchmark,
 }
 
+def needhelp(av):
+  """Check for -h and --help but not past --"""
+  for a in av:
+    if a == '--': return False
+    if a.lower() in ('-h', '--help'): return True
+  return False
+
 def argparse():
   # Custom parsing due to argparse module's limitations
   av = sys.argv[1:]
-  if not av or any(a.lower() in ('-h', '--help') for a in av):
+  if not av or needhelp(av):
     first, rest = cmdhelp.rstrip().split('\n', 1)
-    if sys.stdout.isatty():
-      print(f'\x1B[1;44m{first:78}\x1B[0m\n{rest}')
-    else:
-      print(f'{first}\n{rest}')
+    print(f'\x1B[1;44m{first:78}\x1B[0m\n{rest}')
     sys.exit(0)
   if any(a.lower() in ('-v', '--version') for a in av):
     print(cmdhelp.split('\n')[0])
@@ -137,7 +141,7 @@ def argparse():
       args.files.append(True)
       continue
     if a == '--':
-      args.files += args
+      args.files += aiter
       break
     if a.startswith('--'):
       a = a.lower()

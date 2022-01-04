@@ -45,6 +45,12 @@ def test_argparser(capsys):
   assert not cap.out
   assert "Argument parameter missing: covert enc -Arrp …" in cap.err
 
+  # For double-hyphen file separator (to not parse anything after as args)
+  sys.argv = "covert enc -- filename --help --notaflag -A".split()
+  args = argparse()
+  assert args.files == ["filename", "--help", "--notaflag", "-A"]
+  assert not args.paste
+
 
 ## End-to-End testing: Running Covert as if it was ran from command line
 
@@ -83,7 +89,10 @@ def test_end_to_end(covert, tmp_path):
   assert data == b"test"
 
 
-def test_end_to_end_multiple(covert, tmp_path):
+def test_end_to_end_multiple(covert, tmp_path, mocker):
+  # Enable full status messages
+  mocker.patch("sys.stderr.isatty", return_value=True)
+
   fname = tmp_path / "crypto.covert"
 
   # Encrypt foo.txt into crypto.covert, with signature
@@ -272,3 +281,53 @@ def test_errors(covert):
   cap = covert("enc", "-r", "not-a-file-either", exitcode=10)
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
+
+def test_miscellaneous(covert, tmp_path, capsys, mocker):
+  """Testing remaining spots to gain full coverage."""
+  fname = tmp_path / "test.dat"
+  outfname = tmp_path / "crypto.covert"
+
+  # Write 10 MiB on test.dat
+  with open(f"{fname}", "wb") as f:
+    f.seek(10485760)
+    f.write(b"\0")
+
+  cap = covert("-eaR", "tests/keys/ssh_ed25519.pub", fname, "-o", outfname, "--debug")
+  assert not cap.out
+  assert "10,485,761 📄 test.dat" in cap.err
+
+  cap = covert("-v")
+  assert "A file and message encryptor with strong anonymity" in cap.out
+  assert not cap.err
+
+  cap = covert("-e", 1, "-z", exitcode=1)
+  assert not cap.out
+  assert "Unknown argument" in cap.err
+
+  with pytest.raises(ValueError):
+    cap = covert("-e", "-o", "test.dat", "-o", "test2.dat", exitcode=1)
+    assert not cap.out
+    assert "Only one output file may be specified" in cap.err
+
+  with pytest.raises(ValueError):
+    cap = covert("-eaR", "tests/keys/ssh_ed25519.pub", fname, "-o", fname, exitcode=1)
+    assert not cap.out
+    assert "In-place operation is not supported" in cap.err
+
+  sys.argv = "covert enc --passphrase".split()
+  a = argparse()
+  assert a.askpass == 1
+  cap = capsys.readouterr()
+  assert not cap.out
+  assert not cap.err
+
+  mocker.patch("covert.passphrase.ask", side_effect=KeyboardInterrupt("Testing interrupt"))
+  cap = covert("enc", exitcode=2)
+  assert not cap.out
+  assert "Interrupted." in cap.err
+
+  # A typical case of Broken Pipe: the program being piped to exits and then stdout writes fail
+  mocker.patch("sys.stdout.buffer.write", side_effect=BrokenPipeError())
+  cap = covert("-eR", "tests/keys/ssh_ed25519.pub", fname, exitcode=3)
+  assert not cap.out
+  assert "I/O error (broken pipe)" in cap.err
