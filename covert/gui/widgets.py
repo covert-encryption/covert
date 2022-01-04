@@ -5,39 +5,40 @@ from PySide6.QtGui import QGuiApplication, QPixmap, QStandardItem, QStandardItem
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem, QWidget
 
 from covert import util
+from covert.gui import res
 from covert.gui.util import datafile
 
 
 class MethodsWidget(QWidget):
 
-  def __init__(self, app):
+  def __init__(self, view):
     QWidget.__init__(self)
-    self.app = app
+    self.view = view
     self.layout = QHBoxLayout(self)
     self.layout.setContentsMargins(11, 11, 11, 11)
-    if not (app.passwords or app.recipients):
+    if not (view.passwords or view.recipients):
       lock = QLabel()
-      lock.setPixmap(app.app.unlockicon)
+      lock.setPixmap(res.icons.unlockicon)
       self.layout.addWidget(lock)
       self.layout.addWidget(QLabel(' wide-open – anyone can open the file'))
     else:
       lock = QLabel()
-      lock.setPixmap(app.app.lockicon)
+      lock.setPixmap(res.icons.lockicon)
       self.layout.addWidget(lock)
       self.layout.addWidget(QLabel(' covert'))
     self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed))
-    for p in app.passwords:
+    for p in view.passwords:
       key = QLabel()
-      key.setPixmap(app.app.keyicon)
+      key.setPixmap(res.icons.keyicon)
       self.layout.addWidget(key)
-    for k in app.recipients:
+    for k in view.recipients:
       key = QLabel()
-      key.setPixmap(app.pkicon)
+      key.setPixmap(res.icons.pkicon)
       self.layout.addWidget(key)
       self.layout.addWidget(QLabel(str(k)))
-    for k in app.signatures:
+    for k in view.signatures:
       key = QLabel()
-      key.setPixmap(app.signicon)
+      key.setPixmap(res.icons.signicon)
       self.layout.addWidget(key)
       self.layout.addWidget(QLabel(str(k)))
     clearbutton = QPushButton("Clear keys")
@@ -45,10 +46,10 @@ class MethodsWidget(QWidget):
     self.layout.addWidget(clearbutton)
 
   def clearkeys(self):
-    self.app.recipients = set()
-    self.app.passwords = set()
-    self.app.signatures = set()
-    self.app.update_encryption_views()
+    self.view.recipients = set()
+    self.view.passwords = set()
+    self.view.signatures = set()
+    self.view.update_views()
 
 
 class DecryptWidget(QWidget):
@@ -61,12 +62,12 @@ class DecryptWidget(QWidget):
     s = self.app.blockstream.header.slot if getattr(self.app, 'blockstream') else ""
     if s == "wide-open":
       lock = QLabel()
-      lock.setPixmap(app.unlockicon)
+      lock.setPixmap(res.icons.unlockicon)
       self.layout.addWidget(lock)
       self.layout.addWidget(QLabel(' wide-open – anyone can open the file'))
     else:
       lock = QLabel()
-      lock.setPixmap(app.lockicon)
+      lock.setPixmap(res.icons.lockicon)
       self.layout.addWidget(lock)
       text = f"{s[1]} recipients - unlocked by slot auth{s[0]}" if isinstance(s, tuple) else s
       self.layout.addWidget(QLabel(f" {text}"))
@@ -85,9 +86,10 @@ class DecryptWidget(QWidget):
 
 class EncryptToolbar(QWidget):
 
-  def __init__(self, app):
+  def __init__(self, app, view):
     QWidget.__init__(self)
     self.app = app
+    self.view = view
     self.layout = QHBoxLayout(self)
     self.layout.setContentsMargins(11, 11, 11, 11)
 
@@ -115,22 +117,22 @@ class EncryptToolbar(QWidget):
 
   @Slot()
   def attach(self):
-    self.app.files |= set(QFileDialog.getOpenFileNames(self, "Covert - Attach files")[0])
-    self.app.update_encryption_views()
+    self.view.files |= set(QFileDialog.getOpenFileNames(self, "Covert - Attach files")[0])
+    self.view.update_views()
 
   @Slot()
   def attachdir(self):
-    self.app.files.add(QFileDialog.getExistingDirectory(self, "Covert - Attach a folder"))
-    self.app.update_encryption_views()
+    self.view.files.add(QFileDialog.getExistingDirectory(self, "Covert - Attach a folder"))
+    self.view.update_views()
 
   @Slot()
   def copyarmor(self):
     outfile = BytesIO()
-    self.app.encrypt(outfile)
+    self.view.encrypt(outfile)
     outfile.seek(0)
     data = util.armor_encode(outfile.read())
     QGuiApplication.clipboard().setText(f"```\n{data}\n```\n")
-    self.app.flash("Encrypted message copied to clipboard.")
+    self.app.flash("Covert message copied to clipboard.")
 
   @Slot()
   def savecipher(self):
@@ -142,12 +144,12 @@ class EncryptToolbar(QWidget):
       return
     if name.lower().endswith('.txt'):
       outfile = BytesIO()
-      self.app.encrypt(outfile)
+      self.view.encrypt(outfile)
       outfile.seek(0)
       data = util.armor_encode(outfile.read())
       with open(name, 'wb') as f:
         f.write(f"{data}\n".encode())
       return
     with open(name, 'wb') as f:
-      self.app.encrypt(f)
+      self.view.encrypt(f)
     self.app.flash(f"Encrypted message saved as {name}")
