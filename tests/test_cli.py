@@ -46,9 +46,9 @@ def test_argparser(capsys):
   assert "Argument parameter missing: covert enc -Arrp …" in cap.err
 
   # For double-hyphen file separator (to not parse anything after as args)
-  sys.argv = "covert enc -- filename --notaflag -A".split()
+  sys.argv = "covert enc -- filename --help --notaflag -A".split()
   args = argparse()
-  assert args.files == ["filename", "--notaflag", "-A"]
+  assert args.files == ["filename", "--help", "--notaflag", "-A"]
   assert not args.paste
 
 
