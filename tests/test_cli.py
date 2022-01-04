@@ -45,6 +45,12 @@ def test_argparser(capsys):
   assert not cap.out
   assert "Argument parameter missing: covert enc -Arrp …" in cap.err
 
+  # For double-hyphen file separator (to not parse anything after as args)
+  sys.argv = "covert enc -- filename --notaflag -A".split()
+  args = argparse()
+  assert args.files == ["filename", "--notaflag", "-A"]
+  assert args.paste is False
+
 
 ## End-to-End testing: Running Covert as if it was ran from command line
 
@@ -316,3 +322,10 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
   cap = covert("enc", exitcode=2)
   assert not cap.out
   assert "Interrupted." in cap.err
+
+  # Broken pipe error should generally occur on stdout write but we cannot patch that,
+  # so instead raise it at a higher level to cover the handling in __init__.main.
+  mocker.patch("covert.cli.main_enc", side_effect=BrokenPipeError())
+  cap = covert("-eR", "tests/keys/ssh_ed25519.pub", fname, exitcode=3)
+  assert not cap.out
+  assert "I/O error (broken pipe)" in cap.err
