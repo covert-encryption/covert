@@ -1,15 +1,14 @@
 from io import BytesIO
 
 from nacl.exceptions import CryptoError
-from PySide6.QtCore import QRect, QSize, Qt, QTimer, Slot
-from PySide6.QtGui import QAction, QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QKeySequence, QShortcut, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import *
 
 from covert import passphrase, pubkey, util
 from covert.archive import Archive
 from covert.blockstream import BlockStream
 from covert.gui import res
-from covert.gui.widgets import DecryptWidget, EncryptToolbar, MethodsWidget
 from covert.util import TTY_MAX_SIZE
 
 

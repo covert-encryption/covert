@@ -2,15 +2,15 @@ import os
 from io import BytesIO
 
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QAction, QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel, QValidator
+from PySide6.QtGui import QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel, QValidator
 from PySide6.QtWidgets import *
 
 from covert import passphrase, pubkey, util
 from covert.archive import Archive
-from covert.blockstream import BlockStream, encrypt_file
+from covert.blockstream import encrypt_file
 from covert.gui import res
 from covert.gui.util import datafile
-from covert.gui.widgets import DecryptWidget, EncryptToolbar, MethodsWidget
+from covert.gui.widgets import EncryptToolbar, MethodsWidget
 from covert.util import ARMOR_MAX_SIZE
 
 

@@ -1,18 +1,14 @@
-import os
-import sys
 from contextlib import suppress
-from io import BytesIO
-from itertools import chain
 
-from PySide6.QtCore import QRect, QSize, Qt, QTimer, Slot
-from PySide6.QtGui import QAction, QGuiApplication, QKeySequence, QPixmap, QShortcut, QStandardItem, QStandardItemModel
+from PySide6.QtCore import QRect, QTimer, Qt, Slot
+from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import *
 
-from covert import passphrase, pubkey, util
+from covert import passphrase, util
 from covert.gui import res
-from covert.gui.decrypt import ArchiveView, DecryptView
+from covert.gui.decrypt import DecryptView
 from covert.gui.encrypt import NewMessageView
-from covert.gui.util import datafile, setup_interrupt_handling
+from covert.gui.util import setup_interrupt_handling
 
 
 class App(QApplication):

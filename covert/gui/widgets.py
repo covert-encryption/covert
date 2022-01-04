@@ -1,7 +1,7 @@
 from io import BytesIO
 
-from PySide6.QtCore import QSize, Qt, Slot
-from PySide6.QtGui import QGuiApplication, QPixmap, QStandardItem, QStandardItemModel
+from PySide6.QtCore import QSize, Slot
+from PySide6.QtGui import QGuiApplication, QPixmap
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem, QWidget
 
 from covert import util
