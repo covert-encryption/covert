@@ -137,7 +137,7 @@ def argparse():
       args.files.append(True)
       continue
     if a == '--':
-      args.files += args
+      args.files += aiter
       break
     if a.startswith('--'):
       a = a.lower()

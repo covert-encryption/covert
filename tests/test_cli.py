@@ -49,7 +49,7 @@ def test_argparser(capsys):
   sys.argv = "covert enc -- filename --notaflag -A".split()
   args = argparse()
   assert args.files == ["filename", "--notaflag", "-A"]
-  assert args.paste is False
+  assert not args.paste
 
 
 ## End-to-End testing: Running Covert as if it was ran from command line
