@@ -89,7 +89,10 @@ def test_end_to_end(covert, tmp_path):
   assert data == b"test"
 
 
-def test_end_to_end_multiple(covert, tmp_path):
+def test_end_to_end_multiple(covert, tmp_path, mocker):
+  # Enable full status messages
+  mocker.patch("sys.stderr.isatty", return_value=True)
+
   fname = tmp_path / "crypto.covert"
 
   # Encrypt foo.txt into crypto.covert, with signature
