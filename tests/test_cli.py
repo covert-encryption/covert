@@ -273,7 +273,8 @@ def test_errors(covert):
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
 
-def test_coverage(covert, tmp_path, capsys):
+def test_miscellaneous(covert, tmp_path, capsys, mocker):
+  """Testing remaining spots to gain full coverage."""
   fname = tmp_path / "test.dat"
   outfname = tmp_path / "crypto.covert"
 
@@ -310,3 +311,8 @@ def test_coverage(covert, tmp_path, capsys):
   cap = capsys.readouterr()
   assert not cap.out
   assert not cap.err
+  
+  mocker.patch("covert.passphrase.ask", side_effect=KeyboardInterrupt("Testing interrupt"))
+  cap = covert("enc", exitcode=2)
+  assert not cap.out
+  assert "Interrupted." in cap.err
