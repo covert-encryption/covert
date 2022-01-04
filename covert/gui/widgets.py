@@ -1,12 +1,11 @@
 from io import BytesIO
 
 from PySide6.QtCore import QSize, Slot
-from PySide6.QtGui import QGuiApplication, QPixmap
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSpacerItem, QWidget
 
 from covert import util
 from covert.gui import res
-from covert.gui.util import datafile
 
 
 class MethodsWidget(QWidget):
@@ -93,13 +92,10 @@ class EncryptToolbar(QWidget):
     self.layout = QHBoxLayout(self)
     self.layout.setContentsMargins(11, 11, 11, 11)
 
-    attachicon = QPixmap(datafile('icons8-attach-48.png'))
-    copyicon = QPixmap(datafile('icons8-copy-48.png'))
-    saveicon = QPixmap(datafile('icons8-save-48.png'))
-    attach = QPushButton(attachicon, " Attach &Files")
-    attachdir = QPushButton(attachicon, " Fol&der")
-    copy = QPushButton(copyicon, " &Armored")
-    save = QPushButton(saveicon, " &Save")
+    attach = QPushButton(res.icons.attachicon, " Attach &Files")
+    attachdir = QPushButton(res.icons.attachicon, " Fol&der")
+    copy = QPushButton(res.icons.copyicon, " &Armored")
+    save = QPushButton(res.icons.saveicon, " &Save")
     attach.setIconSize(QSize(24, 24))
     attachdir.setIconSize(QSize(24, 24))
     copy.setIconSize(QSize(24, 24))

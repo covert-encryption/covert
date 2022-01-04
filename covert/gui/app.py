@@ -1,6 +1,6 @@
 from contextlib import suppress
 
-from PySide6.QtCore import QRect, QTimer, Qt, Slot
+from PySide6.QtCore import QRect, Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import *
 

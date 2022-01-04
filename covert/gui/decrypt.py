@@ -1,15 +1,15 @@
-from io import BytesIO
+from pathlib import Path
 
 from nacl.exceptions import CryptoError
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import QSize, Qt, Slot
 from PySide6.QtGui import QKeySequence, QShortcut, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import *
+from showinfm import show_in_file_manager
 
 from covert import passphrase, pubkey, util
 from covert.archive import Archive
 from covert.blockstream import BlockStream
 from covert.gui import res
-from covert.util import TTY_MAX_SIZE
 
 
 class DecryptView(QWidget):
@@ -109,6 +109,7 @@ class DecryptView(QWidget):
 class ArchiveView(QWidget):
   def __init__(self, app, blockstream):
     QWidget.__init__(self)
+    self.app = app
     self.plaintext = QPlainTextEdit()
     self.plaintext.setTabChangesFocus(True)
     self.attachments = QListView()
@@ -116,11 +117,15 @@ class ArchiveView(QWidget):
     self.attachments.setModel(self.attmodel)
     self.attachments.setMaximumHeight(120)
     self.attachments.setWrapping(True)
+    self.toolbar = ArchiveToolbar(app, self)
     self.layout = QVBoxLayout(self)
     self.layout.addWidget(self.plaintext)
     self.layout.addWidget(self.attachments)
+    self.layout.addWidget(self.toolbar)
     a = Archive()
     f = None
+    # This loads all attached files to RAM.
+    # TODO: Handle large files by streaming & filename sanitation
     for data in a.decode(blockstream.decrypt_blocks()):
       if isinstance(data, dict):
         # Index
@@ -128,27 +133,70 @@ class ArchiveView(QWidget):
       elif isinstance(data, bool):
         # Nextfile
         prev = a.prevfile
-        if f:
-          if isinstance(f, BytesIO):
-            f.seek(0)
-            data = f.read()
+        if prev:
+          # Is it a displayable message
+          if prev.name is None:
             try:
-              self.plaintext.appendPlainText(f"{data.decode()}\n")
+              self.plaintext.appendPlainText(f"{prev.data.decode()}\n")
             except UnicodeDecodeError:
               pidx = a.flist.index(prev)
               prev.name = f"noname.{pidx + 1:03}"
               prev.renamed = True
-          f.close()
-          f = None
-        if prev and prev.name:
-          item = QStandardItem(res.icons.fileicon, f"{prev.size:,} {prev.name}")
-          self.attmodel.appendRow(item)
+          # Treat as an attached file
+          if prev.name:
+            item = QStandardItem(res.icons.fileicon, f"{prev.size:,} {prev.name}")
+            self.attmodel.appendRow(item)
         if a.curfile:
-          # Is it a displayable message?
-          if a.curfile.name is None and a.curfile.size is not None and a.curfile.size < TTY_MAX_SIZE:
-            f = BytesIO()
+          a.curfile.data = bytearray()
       else:
-        if f:
-          f.write(data)
+        a.curfile.data += data
+
     self.archive = a
     self.blockstream = blockstream
+
+  def extract(self, path):
+    outdir = Path(path)
+    mainlevel = set()
+    for fi in self.archive.flist:
+      if not fi.name: continue
+      name = outdir / fi.name
+      if not name.resolve().is_relative_to(outdir) or name.is_reserved():
+        raise ValueError(f"Invalid filename {fi.name}")
+      # Collect main level names (files or folders)
+      mname = name
+      while mname.parent != outdir:
+        mname = mname.parent
+      mainlevel.add(str(mname))
+      # Write the file
+      name.parent.mkdir(parents=True, exist_ok=True)
+      with open(name, "wb") as f:
+        f.write(fi.data)
+    self.app.flash(f"Files extracted to {outdir}")
+    # Support for selecting multiple files is too broken, but we get:
+    # - A single attachment file is selected (outdir shown)
+    # - A single attachment folder is shown (contents of)
+    # - Multiple files/folders are shown in outdir but not selected
+    show_in_file_manager(mainlevel.pop() if len(mainlevel) == 1 else str(outdir))
+
+
+class ArchiveToolbar(QWidget):
+
+  def __init__(self, app, view):
+    QWidget.__init__(self)
+    self.app = app
+    self.view = view
+    self.layout = QHBoxLayout(self)
+    self.layout.setContentsMargins(11, 11, 11, 11)
+
+    attach = QPushButton(res.icons.attachicon, " &Extract All")
+    attach.setIconSize(QSize(24, 24))
+    self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding))
+    self.layout.addWidget(attach)
+
+    attach.clicked.connect(self.attach)
+
+  @Slot()
+  def attach(self):
+    path = QFileDialog.getExistingDirectory(self, "Covert - Extract To")
+    if path:
+      self.view.extract(path)

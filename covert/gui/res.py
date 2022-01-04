@@ -16,6 +16,11 @@ class Icons:
     self.keyicon = QPixmap(datafile('icons8-key-48.png')).scaled(24, 24)
     self.pkicon = QPixmap(datafile('icons8-link-48.png')).scaled(24, 24)
     self.signicon = QPixmap(datafile('icons8-signing-a-document-48.png')).scaled(24, 24)
+    # Bottom toolbar icons
+    self.attachicon = QPixmap(datafile('icons8-attach-48.png'))
+    self.copyicon = QPixmap(datafile('icons8-copy-48.png'))
+    self.saveicon = QPixmap(datafile('icons8-save-48.png'))
+
 
 icons = None
 
