@@ -105,10 +105,7 @@ def argparse():
   av = sys.argv[1:]
   if not av or needhelp(av):
     first, rest = cmdhelp.rstrip().split('\n', 1)
-    if sys.stdout.isatty():
-      print(f'\x1B[1;44m{first:78}\x1B[0m\n{rest}')
-    else:
-      print(f'{first}\n{rest}')
+    print(f'\x1B[1;44m{first:78}\x1B[0m\n{rest}')
     sys.exit(0)
   if any(a.lower() in ('-v', '--version') for a in av):
     print(cmdhelp.split('\n')[0])
