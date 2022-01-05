@@ -111,6 +111,8 @@ class ArchiveView(QWidget):
     QWidget.__init__(self)
     self.app = app
     self.blockstream = blockstream
+    self.decrwidget = DecryptWidget(self)
+    self.details = QGridLayout()
     self.plaintext = QPlainTextEdit()
     self.plaintext.setTabChangesFocus(True)
     self.attachments = QTreeWidget()
@@ -120,10 +122,36 @@ class ArchiveView(QWidget):
     self.attachments.setColumnWidth(1, 80)
     self.toolbar = ArchiveToolbar(app, self)
     self.layout = QVBoxLayout(self)
+    self.layout.addWidget(self.decrwidget)
+    self.layout.addLayout(self.details)
     self.layout.addWidget(self.plaintext)
     self.layout.addWidget(self.attachments)
     self.layout.addWidget(self.toolbar)
     self.init_extract()
+
+    self.details.addWidget(QLabel("File hash:"), 0, 0)
+    self.details.addWidget(QLineEdit(self.archive.filehash[:12].hex()), 0, 1)
+    i = 1
+    if not self.archive.signatures:
+      if isinstance(self.blockstream.header.key, tuple):
+        self.details.addWidget(QLabel("Sender:"), i, 0)
+        self.details.addWidget(QLineEdit("Anonymous"), i, 1)
+        security = "Anyone could have sent this message to you. File hashes may be compared to verify authenticity."
+      else:
+        security = "No public key recipients or signatures. All security relies on that passphrase."
+    else:
+      security = "Everything has been verified signed by the sender keys. But check that the keys belong to who the sender claims to be."
+      for i, (valid, key, text) in enumerate(self.archive.signatures, start=i):
+        if valid:
+          self.details.addWidget(QLabel("Sender:"), i, 0)
+          self.details.addWidget(QLineEdit(f" ✅ {key} {text}\n"), i, 1)
+        else:
+          self.details.addWidget(QLabel("Invalid signature:"), i, 0)
+          self.details.addWidget(QLineEdit(f" ❌  {key} {text}\n"), i, 1)
+          security = "Someone has tampered with the file, possibly one of the other recipients. Do not trust the content."
+    i += 1
+    self.details.addWidget(QLabel(security), i, 0, 1, 2)
+
 
   def init_extract(self):
     a = Archive()
@@ -161,6 +189,7 @@ class ArchiveView(QWidget):
       else:
         a.curfile.data += data
 
+    self.blockstream.verify_signatures(a)
     self.archive = a
 
     if not attachments:
@@ -211,3 +240,24 @@ class ArchiveToolbar(QWidget):
     self.layout.addWidget(self.extract)
 
     self.extract.clicked.connect(self.view.extract)
+
+
+class DecryptWidget(QWidget):
+
+  def __init__(self, view):
+    QWidget.__init__(self)
+    self.layout = QHBoxLayout(self)
+    self.layout.setContentsMargins(11, 11, 11, 11)
+    s = view.blockstream.header.slot
+    if s == "wide-open":
+      lock = QLabel()
+      lock.setPixmap(res.icons.unlockicon)
+      self.layout.addWidget(lock)
+      self.layout.addWidget(QLabel(' wide-open – anyone can open the file'))
+    else:
+      lock = QLabel()
+      lock.setPixmap(res.icons.lockicon)
+      self.layout.addWidget(lock)
+      text = ("single recipient (your public key)" if s[1] == 1 else f"{s[1]} recipients") if isinstance(s, tuple) else s
+      self.layout.addWidget(QLabel(f" decrypted – {text}"))
+    self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed))

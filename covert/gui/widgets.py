@@ -55,37 +55,6 @@ class MethodsWidget(QWidget):
     self.view.update_views()
 
 
-class DecryptWidget(QWidget):
-
-  def __init__(self, app):
-    QWidget.__init__(self)
-    self.app = app
-    self.layout = QHBoxLayout(self)
-    self.layout.setContentsMargins(11, 11, 11, 11)
-    s = self.app.blockstream.header.slot if getattr(self.app, 'blockstream') else ""
-    if s == "wide-open":
-      lock = QLabel()
-      lock.setPixmap(res.icons.unlockicon)
-      self.layout.addWidget(lock)
-      self.layout.addWidget(QLabel(' wide-open – anyone can open the file'))
-    else:
-      lock = QLabel()
-      lock.setPixmap(res.icons.lockicon)
-      self.layout.addWidget(lock)
-      text = f"{s[1]} recipients - unlocked by slot auth{s[0]}" if isinstance(s, tuple) else s
-      self.layout.addWidget(QLabel(f" {text}"))
-    self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed))
-    clearbutton = QPushButton("Clear keys")
-    clearbutton.clicked.connect(self.clearkeys)
-    self.layout.addWidget(clearbutton)
-
-  def clearkeys(self):
-    self.app.recipients = set()
-    self.app.passwords = set()
-    self.app.signatures = set()
-    self.app.update_encryption_views()
-
-
 
 class EncryptToolbar(QWidget):
 
