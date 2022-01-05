@@ -1,9 +1,11 @@
 import sys
 
+from covert.gui import app
+
+
 def main():
-  from covert.gui.app import App
-  return App().exec()
+  sys.exit(app.App().exec())
 
 
 if __name__ == "__main__":
-  sys.exit(main())
+  main()
