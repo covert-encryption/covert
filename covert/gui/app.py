@@ -97,7 +97,7 @@ class MainWindow(QMainWindow):
       # TODO: Implement in a thread using mmap instead
       with open(file, "rb") as f:
         data = f.read()
-      if 40 <= len(data) <= 2 * ARMOR_MAX_SIZE:
+      if 40 <= len(data) <= 2 * util.ARMOR_MAX_SIZE:
         # Try reading the file as armored text rather than binary
         with suppress(ValueError):
           data = util.armor_decode(data.decode())

@@ -30,6 +30,8 @@ class MethodsWidget(QWidget):
       key = QLabel()
       key.setPixmap(res.icons.keyicon)
       self.layout.addWidget(key)
+      if p in view.generated:
+        self.layout.addWidget(QLabel(f" {view.generated[p]}"))
     for k in view.recipients:
       key = QLabel()
       key.setPixmap(res.icons.pkicon)
@@ -48,6 +50,8 @@ class MethodsWidget(QWidget):
     self.view.recipients = set()
     self.view.passwords = set()
     self.view.signatures = set()
+    self.view.auth.pkinput.setText("")
+    self.view.auth.pw.setText("")
     self.view.update_views()
 
 
@@ -123,6 +127,7 @@ class EncryptToolbar(QWidget):
 
   @Slot()
   def copyarmor(self):
+    if not self.view.validate(): return
     outfile = BytesIO()
     self.view.encrypt(outfile)
     outfile.seek(0)
@@ -132,6 +137,7 @@ class EncryptToolbar(QWidget):
 
   @Slot()
   def savecipher(self):
+    if not self.view.validate(): return
     name = QFileDialog.getSaveFileName(
       self, 'Covert - Save ciphertext', "", 'ASCII Armored - good stealth (*.txt);;Covert Binary - maximum stealth (*)',
       'Covert Binary - maximum stealth (*)'

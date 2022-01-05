@@ -24,6 +24,7 @@ class NewMessageView(QWidget):
     self.signatures = set()
     self.identities = set()
     self.passwords = set()
+    self.generated = {}
 
     self.app = app
     self.auth = AuthInput(app, self)
@@ -59,11 +60,19 @@ class NewMessageView(QWidget):
     if len(self.recipients) + len(self.passwords) > 20:
       self.recipients = set(list(self.recipients)[:20])
       self.passwords = set(list(self.passwords)[:20 - len(self.recipients)])
-      self.window.update_encryption_views()
-      raise ValueError("Some recipients were discarded, can only have 20 recipients.")
+      self.app.flash("Some recipients were discarded, can only have 20 recipients.")
 
     self.auth.siginput.setText(', '.join(str(k) for k in self.signatures) or "Anonymous (no signature)")
-
+    # Avoid user confusion by hiding the password input once there are recipients or a password.
+    # Still allows adding a passphrase first and then public key recipients, in case needed.
+    addpw = not self.recipients and not self.passwords
+    self.auth.notes.setVisible(addpw)
+    self.auth.pw.setVisible(addpw)
+    self.auth.addbutton.setVisible(addpw)
+    if addpw:
+      # Update password hints
+      self.auth.validator.validate("", 0)
+      self.auth.title.setText("<b>Add a recipient key or choose a passphrase to encrypt with.</b>")
     self.methods.deleteLater()
     self.methods = MethodsWidget(self)
     self.layout.addWidget(self.methods, 4, 0, 1, -1)
@@ -75,6 +84,11 @@ class NewMessageView(QWidget):
       item = QStandardItem(icon, a.split('/')[-1])
       self.attmodel.appendRow(item)
 
+  def validate(self):
+    if self.plaintext.toPlainText().strip() or self.files: return True
+    self.app.flash("Type in a message or add some files first.")
+    return False
+
   def encrypt(self, outfile):
     # Process the message, prune surrounding whitespace
     msg = self.plaintext.toPlainText()
@@ -83,8 +97,6 @@ class NewMessageView(QWidget):
       msg = util.encode(msg)
       a = Archive()
       files = list(sorted(self.files))
-      if not msg and not files:
-        raise ValueError("Type in a message or add some files first.")
       a.file_index([msg] + files if msg else files)
       if self.signatures:
         a.index['s'] = [s.edpk for s in self.signatures]
@@ -188,21 +200,25 @@ class AuthInput(QWidget):
   @Slot()
   def addpassword(self):
     pw = self.pw.text()
+    visible = False
     if not pw:
       pw = passphrase.generate()
-      note = f"Passphrase added: {pw}"
+      visible = True
     else:
       hint, valid = passphrase.pwhints(pw)
       if not valid:
         self.notes.setText(2*'\n' + "A stronger password is required.")
         return
-      note = "Passphrase added."
-    self.view.passwords.add(passphrase.pwhash(util.encode(pw)))
+    pwhash = passphrase.pwhash(util.encode(pw))
+    self.view.passwords.add(pwhash)
+    if visible:
+      self.view.generated[pwhash] = pw
     self.view.plaintext.setFocus()
     self.pw.setText("")
     self.validator.validate(pw, 0)
     self.title.setText("")
-    self.notes.setText(2*'\n' + note)
+    self.notes.setText(2*'\n')
+    self.view.app.flash("Passphrase added.")
     self.view.update_views()
 
   @Slot()
@@ -218,15 +234,18 @@ class AuthInput(QWidget):
     # In CLI github is considered a file, and here not (because not from file dialog)
     # Need to handle this logic mismatch here
     keystr = self.pkinput.text()
-    if keystr.startswith('github:'):
-      self.app.recipients |= set(pubkey.read_pk_file(keystr))
-    else:
-      self.view.recipients.add(pubkey.decode_pk(keystr))
-      self.view.update_views()
+    try:
+      if keystr.startswith('github:'):
+        self.app.recipients |= set(pubkey.read_pk_file(keystr))
+      else:
+        self.view.recipients.add(pubkey.decode_pk(keystr))
+        self.view.update_views()
+    except ValueError as e:
+      self.app.flash(str(e))
+      return
     self.pkinput.setText("")
     if self.app.recipients:
-      self.title.setText("<b>Recipient public key added.</b>")
-      self.notes.setText("\n\n")
+      self.app.flash("Recipient public key added.")
 
   @Slot()
   def loadpk(self):
@@ -241,9 +260,9 @@ class AuthInput(QWidget):
       self.app.flash(str(e))
       return
     self.view.update_views()
-    if self.app.recipients:
-      self.title.setText("<b>Recipient public key added.</b>")
-      self.notes.setText("\n\n")
+    if self.view.recipients:
+      self.app.flash("Recipient public key added.")
+      self.title.setText("")
 
   @Slot()
   def loadsk(self):

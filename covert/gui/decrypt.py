@@ -110,23 +110,28 @@ class ArchiveView(QWidget):
   def __init__(self, app, blockstream):
     QWidget.__init__(self)
     self.app = app
+    self.blockstream = blockstream
     self.plaintext = QPlainTextEdit()
     self.plaintext.setTabChangesFocus(True)
-    self.attachments = QListView()
-    self.attmodel = QStandardItemModel(self)
-    self.attachments.setModel(self.attmodel)
-    self.attachments.setMaximumHeight(120)
-    self.attachments.setWrapping(True)
+    self.attachments = QTreeWidget()
+    self.attachments.setColumnCount(2)
+    self.attachments.setHeaderLabels(["Name", "Size", "Notes"])
+    self.attachments.setColumnWidth(0, 400)
+    self.attachments.setColumnWidth(1, 80)
     self.toolbar = ArchiveToolbar(app, self)
     self.layout = QVBoxLayout(self)
     self.layout.addWidget(self.plaintext)
     self.layout.addWidget(self.attachments)
     self.layout.addWidget(self.toolbar)
+    self.init_extract()
+
+  def init_extract(self):
     a = Archive()
     f = None
     # This loads all attached files to RAM.
     # TODO: Handle large files by streaming & filename sanitation
-    for data in a.decode(blockstream.decrypt_blocks()):
+    attachments = 0
+    for data in a.decode(self.blockstream.decrypt_blocks()):
       if isinstance(data, dict):
         # Index
         pass
@@ -144,17 +149,29 @@ class ArchiveView(QWidget):
               prev.renamed = True
           # Treat as an attached file
           if prev.name:
-            item = QStandardItem(res.icons.fileicon, f"{prev.size:,} {prev.name}")
-            self.attmodel.appendRow(item)
+            item = QTreeWidgetItem(self.attachments)
+            #item = QStandardItem(res.icons.fileicon, f"{prev.size:,} {prev.name}")
+            item.setIcon(0, res.icons.fileicon)
+            item.setText(0, prev.name)
+            item.setText(1, f"{prev.size:,}")
+            item.setTextAlignment(1, Qt.AlignRight)
+            attachments += 1
         if a.curfile:
           a.curfile.data = bytearray()
       else:
         a.curfile.data += data
 
     self.archive = a
-    self.blockstream = blockstream
 
-  def extract(self, path):
+    if not attachments:
+      self.attachments.setVisible(False)
+      self.toolbar.extract.setEnabled(False)
+    if not self.plaintext.toPlainText():
+      self.plaintext.setVisible(False)
+
+  def extract(self):
+    path = QFileDialog.getExistingDirectory(self, "Covert - Extract To")
+    if not path: return
     outdir = Path(path)
     mainlevel = set()
     for fi in self.archive.flist:
@@ -188,15 +205,9 @@ class ArchiveToolbar(QWidget):
     self.layout = QHBoxLayout(self)
     self.layout.setContentsMargins(11, 11, 11, 11)
 
-    attach = QPushButton(res.icons.attachicon, " &Extract All")
-    attach.setIconSize(QSize(24, 24))
+    self.extract = QPushButton(res.icons.attachicon, " &Extract All")
+    self.extract.setIconSize(QSize(24, 24))
     self.layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding))
-    self.layout.addWidget(attach)
+    self.layout.addWidget(self.extract)
 
-    attach.clicked.connect(self.attach)
-
-  @Slot()
-  def attach(self):
-    path = QFileDialog.getExistingDirectory(self, "Covert - Extract To")
-    if path:
-      self.view.extract(path)
+    self.extract.clicked.connect(self.view.extract)
