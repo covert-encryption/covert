@@ -23,7 +23,7 @@ class fe:
   def __repr__(self): return value_name(self)
   def __str__(self): return bytes(self).hex()
   def __bytes__(self): return self.val.to_bytes(32, 'little')
-  def bit(self, n: int): return bool(self.val & (1 << n))
+  def bit(self, n: int): return bool(self.val & 1 << n)
 
   def __eq__(self, other):
     # Note: if we return NotImplemented, Python does object comparison and returns False
@@ -52,7 +52,7 @@ class fe:
   def inv(self) -> fe: return self**-1
 
   @cached_property
-  def is_negative(self) -> bool: return self.val % p > p2
+  def is_negative(self) -> bool: return self.val > p2
 
   # Legendre symbol:
   # -  0 if n is zero
@@ -95,7 +95,7 @@ class fe:
   def invsqrt(self) -> fe:
     """Fast 1/sqrt(x) mod p, more black magic than Carmack's"""
     isr = self**p58
-    quartic = self * isr**2
+    quartic = self * isr.sq
     if quartic == minus1 or quartic == -sqrtm1: isr *= sqrtm1
     isr.is_square = quartic == one or quartic == minus1
     return isr

@@ -14,6 +14,7 @@
 # Public symbols are imported here. These are very low level primitives.
 # Lower case constants are scalars (int or fe), upper case are EdPoints.
 
+from . import mont
 from .ed import LO, ZERO, D, EdPoint, G, L, dirty_scalar, secret_scalar
 from .eddsa import ed_sign, ed_verify
 from .elligator import ElligatorError, egcreate, eghide, egreveal
