@@ -202,7 +202,7 @@ def decode_sk(keystr: str) -> Key:
     if len(keybytes) == 32:
       # Must be a clamped scalar
       if keybytes[0] & 8 == 0 and keybytes[31] & 0xC0 == 0x40:
-        return Key(sk=keybytes, comment="wg")
+        return Key(keystr=keystr, sk=keybytes, comment="wg")
   except ValueError:
     pass
   raise ValueError(f"Unable to parse private key {keystr!r}")

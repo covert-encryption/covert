@@ -12,6 +12,10 @@ AGE_PK = "age1zvkyg2lqzraa2lnjvqej32nkuu0ues2s82hzrye869xeexvn73equnujwj"
 AGE_SK = "AGE-SECRET-KEY-1GFPYYSJZGFPYYSJZGFPYYSJZGFPYYSJZGFPYYSJZGFPYYSJZGFPQ4EGAEX"
 AGE_SK_BYTES = 32 * b"\x42"
 
+# Generated with wg genkey and wg pubkey
+WG_SK = "kLkIpWh5MYKwUA7JdQHnmbc6dEiW0py4VRvqmYyPLHc="
+WG_PK = "ElMfFd2qVIROK4mRaXJouYWC2lxxMApMSe9KyAZcEBc="
+
 
 def test_age_key_decoding():
   pk = pubkey.decode_pk(AGE_PK)
@@ -34,6 +38,19 @@ def test_age_key_decoding_and_encoding():
   assert pubkey.encode_age_pk(pk) == AGE_PK
   assert pubkey.encode_age_pk(sk) == AGE_PK
   assert pubkey.encode_age_sk(sk) == AGE_SK
+
+
+def test_wireguard_keystr():
+  pk = pubkey.decode_pk(WG_PK)
+  sk = pubkey.decode_sk(WG_SK)
+  # Key comparison is by public keys
+  assert pk == sk
+  assert pk.keystr == WG_PK
+  assert sk.keystr == WG_SK
+  assert pk.comment == 'wg'
+  assert sk.comment == 'wg'
+  assert repr(pk).endswith(':PK]')
+  assert repr(sk).endswith(':SK]')
 
 
 def test_ssh_key_decoding():
@@ -63,6 +80,7 @@ def test_minisign_keyfiles(mocker):
   assert sk.comment == 'ms'
   assert pk.comment == 'ms'
   assert sk == pk
+
 
 def test_key_exchange():
   # Alice sends a message to Bob
