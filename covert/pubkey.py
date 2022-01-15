@@ -199,13 +199,12 @@ def decode_sk(keystr: str) -> Key:
   # Plain Curve25519 key (WireGuard)
   try:
     keybytes = b64decode(keystr, validate=True)
-    if len(keybytes) == 32:
-      # Must be a clamped scalar
-      if keybytes[0] & 8 == 0 and keybytes[31] & 0xC0 == 0x40:
+    # Must be a clamped scalar
+    if len(keybytes) == 32 and keybytes[0] & 8 == 0 and keybytes[31] & 0xC0 == 0x40:
         return Key(keystr=keystr, sk=keybytes, comment="wg")
   except ValueError:
     pass
-  raise ValueError(f"Unable to parse private key {keystr!r}")
+  raise ValueError(f"Unable to parse secret key {keystr!r}")
 
 
 def decode_sk_minisign(keystr: str, pw: Optional[bytes] = None) -> Key:

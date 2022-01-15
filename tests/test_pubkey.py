@@ -52,6 +52,12 @@ def test_wireguard_keystr():
   assert repr(pk).endswith(':PK]')
   assert repr(sk).endswith(':SK]')
 
+  # Trying to decode a public key as secret key should usually fail
+  # (works with the test key but no guarantees with others)
+  with pytest.raises(ValueError) as exc:
+    pubkey.decode_sk(WG_PK)
+  assert "Unable to parse secret key" in str(exc.value)
+
 
 def test_ssh_key_decoding():
   pk, = pubkey.read_pk_file("tests/keys/ssh_ed25519.pub")
