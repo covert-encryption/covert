@@ -229,7 +229,7 @@ def decode_sk_minisign(keystr: str, pw: Optional[bytes] = None) -> Key:
   csum2 = sodium.crypto_generichash.generichash_blake2b_final(b2state)
   if csum != csum2:
     raise ValueError('Unable to decrypt Minisign secret key')
-  return Key(edsk=edsk, edpk=edpk)
+  return Key(edsk=edsk, edpk=edpk, comment="ms")
 
 
 def decode_age_pk(keystr: str) -> Key:

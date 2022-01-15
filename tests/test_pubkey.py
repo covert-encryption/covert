@@ -56,6 +56,14 @@ def test_ssh_wrong_password(mocker):
     sk, = pubkey.read_sk_file("tests/keys/ssh_ed25519_password")
 
 
+def test_minisign_keyfiles(mocker):
+  mocker.patch('covert.passphrase.ask', return_value=(b"password", True))
+  sk, = pubkey.read_sk_file("tests/keys/minisign_password.key")
+  pk, = pubkey.read_pk_file("tests/keys/minisign_password.pub")
+  assert sk.comment == 'ms'
+  assert pk.comment == 'ms'
+  assert sk == pk
+
 def test_key_exchange():
   # Alice sends a message to Bob
   nonce = token_bytes(12)
