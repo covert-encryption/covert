@@ -2,6 +2,7 @@ import os
 import struct
 from base64 import b64decode
 from contextlib import suppress
+from typing import Optional
 from urllib.parse import quote
 from urllib.request import urlopen
 
@@ -9,12 +10,6 @@ import nacl.bindings as sodium
 
 from covert import bech, passphrase, sshkey, util
 from covert.elliptic import egcreate, egreveal
-
-
-def derive_symkey(nonce, local, remote):
-  assert local.sk, f"Missing secret key for {local=}"
-  shared = sodium.crypto_scalarmult(local.sk, remote.pk)
-  return sodium.crypto_hash_sha512(bytes(nonce) + shared)[:32]
 
 
 class Key:
@@ -106,7 +101,13 @@ class Key:
       sodium.crypto_box_open(ciphertext, nonce, self.pk, self.sk)
 
 
-def read_pk_file(keystr):
+def derive_symkey(nonce, local: Key, remote: Key) -> bytes:
+  assert local.sk, f"Missing secret key for {local=}"
+  shared = sodium.crypto_scalarmult(local.sk, remote.pk)
+  return sodium.crypto_hash_sha512(bytes(nonce) + shared)[:32]
+
+
+def read_pk_file(keystr: str) -> list[Key]:
   ghuser = None
   if keystr.startswith("github:"):
     ghuser = keystr[7:]
@@ -135,13 +136,13 @@ def read_pk_file(keystr):
   return keys
 
 
-def read_sk_any(keystr):
+def read_sk_any(keystr: str) -> list[Key]:
   with suppress(ValueError):
-    return decode_sk(keystr)
+    return [decode_sk(keystr)]
   return read_sk_file(keystr)
 
 
-def read_sk_file(keystr):
+def read_sk_file(keystr: str) -> list[Key]:
   if not os.path.isfile(keystr):
     raise ValueError(f"Secret key file {keystr} not found")
   with open(keystr, "rb") as f:
@@ -163,7 +164,7 @@ def read_sk_file(keystr):
   return keys
 
 
-def decode_pk(keystr):
+def decode_pk(keystr: str) -> Key:
   # Age keys use Bech32 encoding
   if keystr.startswith("age1"):
     return decode_age_pk(keystr)
@@ -171,8 +172,8 @@ def decode_pk(keystr):
   try:
     token, comment = keystr, ''
     if keystr.startswith('ssh-ed25519 '):
-      t, token, *comment = keystr.split(' ', 2)
-      comment = comment[0] if comment else 'ssh'
+      t, token, *cmt = keystr.split(' ', 2)
+      comment = cmt[0] if cmt else 'ssh'
     keybytes = b64decode(token, validate=True)
     ssh = keybytes.startswith(b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00 ")
     minisign = len(keybytes) == 42 and keybytes.startswith(b'Ed')
@@ -188,7 +189,7 @@ def decode_pk(keystr):
   raise ValueError(f"Unrecognized key {keystr}")
 
 
-def decode_sk(keystr):
+def decode_sk(keystr: str) -> Key:
   # Age secret keys in Bech32 encoding
   if keystr.lower().startswith("age-secret-key-"):
     return decode_age_sk(keystr)
@@ -198,27 +199,28 @@ def decode_sk(keystr):
   # Plain Curve25519 key (WireGuard)
   try:
     keybytes = b64decode(keystr, validate=True)
-    if len(keybytes) == 32:
-      return Key(sk=keybytes)
+    # Must be a clamped scalar
+    if len(keybytes) == 32 and keybytes[0] & 8 == 0 and keybytes[31] & 0xC0 == 0x40:
+        return Key(keystr=keystr, sk=keybytes, comment="wg")
   except ValueError:
     pass
-  raise ValueError(f"Unable to parse private key {keystr!r}")
+  raise ValueError(f"Unable to parse secret key {keystr!r}")
 
 
-def decode_sk_minisign(keystr, pw=None):
+def decode_sk_minisign(keystr: str, pw: Optional[bytes] = None) -> Key:
   # None means try without password, then ask
   if pw is None:
     try:
       return decode_sk_minisign(keystr, b'')
     except ValueError:
       pass
-    pw = util.encode(passphrase.ask('Minisign passkey')[0])
+    pw = passphrase.ask('Minisign passkey')[0]
     return decode_sk_minisign(keystr, pw)
   data = b64decode(keystr)
   fmt, salt, ops, mem, token = struct.unpack('<6s32sQQ104s', data)
   if fmt != b'EdScB2' or ops != 1 << 25 or mem != 1 << 30:
     raise ValueError(f'Not a (supported) Minisign secret key {fmt=}')
-  out = sodium.crypto_pwhash_scryptsalsa208sha256_ll(pw, salt, n=1 << 20, r=8, p=1, maxmem=float('inf'), dklen=104)
+  out = sodium.crypto_pwhash_scryptsalsa208sha256_ll(pw, salt, n=1 << 20, r=8, p=1, maxmem=1 << 31, dklen=104)
   token = util.xor(out, token)
   keyid, edsk, edpk, csum = struct.unpack('8s32s32s32s', token)
   b2state = sodium.crypto_generichash_blake2b_init()
@@ -226,20 +228,20 @@ def decode_sk_minisign(keystr, pw=None):
   csum2 = sodium.crypto_generichash.generichash_blake2b_final(b2state)
   if csum != csum2:
     raise ValueError('Unable to decrypt Minisign secret key')
-  return Key(edsk=edsk, edpk=edpk)
+  return Key(edsk=edsk, edpk=edpk, comment="ms")
 
 
-def decode_age_pk(keystr):
+def decode_age_pk(keystr: str) -> Key:
   return Key(keystr=keystr, comment="age", pk=bech.decode("age", keystr.lower()))
 
 
-def encode_age_pk(key):
+def encode_age_pk(key: Key) -> str:
   return bech.encode("age", key.pk)
 
 
-def decode_age_sk(keystr):
+def decode_age_sk(keystr: str) -> Key:
   return Key(keystr=keystr, comment="age", sk=bech.decode("age-secret-key-", keystr.lower()))
 
 
-def encode_age_sk(key):
+def encode_age_sk(key: Key) -> str:
   return bech.encode("age-secret-key-", key.sk).upper()

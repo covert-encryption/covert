@@ -22,7 +22,7 @@ setup(
     "bcrypt>=3.0.0",
     "colorama>=0.4",
     "cryptography>=35",
-    "pynacl>=1.4",
+    "pynacl>=1.5",
     "tqdm>=4.62",
     "msgpack>=1.0",
     "pyperclip>=1.8",
