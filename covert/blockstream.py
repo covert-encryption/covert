@@ -244,7 +244,7 @@ def encrypt_file(auth, blockinput, a):
   a.filehash = blkhash
   # Add signature blocks
   for key in identities:
-    signature = xed_sign(key.sk, blkhash, token_bytes(64))
+    signature = xed_sign(key.sk, blkhash, blkhash)  # blkhash is both the message and the nonce
     nsig = sha512(blkhash + key.pk).digest()[:12]
     ksig = blkhash[:32]
     yield chacha.encrypt(signature, None, nsig, ksig)
