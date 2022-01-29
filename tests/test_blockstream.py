@@ -70,7 +70,7 @@ def test_latencies(values, expected_seq):
     next(e)
 
 
-@pytest.mark.parametrize("size", [1, 5000, 20 << 20])
+@pytest.mark.parametrize("size", [1, 1100, 5000, 20 << 20])
 def test_encrypt_decrypt(size):
   """Verify that the blockstream level encrypt-decrypt cycle works as intended."""
 

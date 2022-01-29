@@ -35,10 +35,8 @@ class BlockStream:
     self.block = None
     self.blkhash = None
     self.ciphertext = None
-    self.filepos = 0
-    self.filelen = 0
     self.q = collections.deque()
-    self.pos = 0  # Current position within ciphertext (buffer)
+    self.pos = 0  # Current position within self.ciphertext; queued for decryption, not decoded
 
   def authenticate(self, anykey):
     """Attempt decryption using secret key or password hash"""
@@ -100,7 +98,7 @@ class BlockStream:
     self.pos = self.header.block0pos
     header = bytes(self.ciphertext[:self.header.block0pos])
     self.pos = self._add_to_queue(self.pos, self.header.block0len + 19, aad=header)
-    nextlen = BS
+    nextlen = self.header.block0len
     while nextlen:
       # Stream blocks into worker threads
       while len(self.q) < self.workers:
@@ -117,9 +115,11 @@ class BlockStream:
           block = memoryview(fut.result())
           nextlen = int.from_bytes(block[-3:], "little")
           self.blkhash = sha512(self.blkhash + self.ciphertext[p + elen - 16:p + elen]).digest()
-          self.filepos += len(block) + 16
           yield block[:-3]
           if len(self.q) < self.workers:
+            # Roll back pos to last decoded block end whenever the queue is emptied
+            if not self.q: self.pos = p + elen
+            # Buffer more blocks
             break
         except CryptoError:
           # Reset the queue and try again at failing pos with new nextlen if available
