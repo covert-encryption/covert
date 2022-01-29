@@ -115,7 +115,7 @@ class BlockStream:
           nextlen = int.from_bytes(block[-3:], "little")
           self.blkhash = sha512(self.blkhash + self.ciphertext[p + elen - 16:p + elen]).digest()
           yield block[:-3]
-          if len(self.q) < self.workers: break  # Buffer more blocks
+          break  # Buffer more blocks
         except CryptoError:
           # Reset the queue and try again at failing pos with new nextlen if available
           for qq in self.q:
