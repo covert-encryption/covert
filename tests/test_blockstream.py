@@ -79,18 +79,30 @@ def test_encrypt_decrypt(size):
 
   plaintext = token_bytes(size)
   inf = BytesIO(plaintext)
-  ciphertext = b''
   a = Archive()
-  for block in encrypt_file(AUTH, blockinput, a):
-    ciphertext += block
+  ciphertext = b"".join(encrypt_file(AUTH, blockinput, a))
 
   lenplain = len(plaintext)
   lencipher = len(ciphertext)
   calculatedcipher = 12 + 19 + lenplain + (lenplain - (1024-12-19) + BS - 1) // BS * 19
   assert lencipher == calculatedcipher
   f = BytesIO(ciphertext)
-  plainout = b''
   a = Archive()
-  for data in decrypt_file(AUTH_DEC, f, a):
-    plainout += data
+  plainout = b"".join(decrypt_file(AUTH_DEC, f, a))
   assert plainout == plaintext
+
+
+def test_data_corruption():
+  def blockinput(block):
+    block.pos = inf.readinto(block.data)
+
+  plaintext = token_bytes(1100)
+  inf = BytesIO(plaintext)
+  a = Archive()
+  ciphertext = bytearray().join(encrypt_file(AUTH, blockinput, a))
+  ciphertext[-50] ^= 1  # Flip a bit
+  f = BytesIO(ciphertext)
+  a = Archive()
+  with pytest.raises(ValueError) as e:
+    plainout = b"".join(decrypt_file(AUTH_DEC, f, a))
+  assert str(e.value) == "Data corruption: Failed to decrypt ciphertext block of 126 bytes"

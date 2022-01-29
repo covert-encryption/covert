@@ -123,7 +123,7 @@ class BlockStream:
           self.q.clear()
           extlen = nextlen + 19
           if elen == extlen:
-            raise CryptoError(f"Failed to decrypt block {self.key.hex()} {nblk.hex()} at ({self.ciphertext[p:p+extlen].hex()})[{p}:{p + extlen}]") from None
+            raise ValueError(f"Data corruption: Failed to decrypt ciphertext block of {extlen} bytes") from None
           self.nonce = noncegen(nblk)
           self.pos = self._add_to_queue(p, extlen)
     for qq in self.q:
