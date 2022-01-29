@@ -32,7 +32,6 @@ class BlockStream:
     self.nonce = None
     self.workers = 8
     self.executor = ThreadPoolExecutor(max_workers=self.workers)
-    self.block = None
     self.blkhash = None
     self.ciphertext = None
     self.q = collections.deque()
@@ -116,11 +115,7 @@ class BlockStream:
           nextlen = int.from_bytes(block[-3:], "little")
           self.blkhash = sha512(self.blkhash + self.ciphertext[p + elen - 16:p + elen]).digest()
           yield block[:-3]
-          if len(self.q) < self.workers:
-            # Roll back pos to last decoded block end whenever the queue is emptied
-            if not self.q: self.pos = p + elen
-            # Buffer more blocks
-            break
+          if len(self.q) < self.workers: break  # Buffer more blocks
         except CryptoError:
           # Reset the queue and try again at failing pos with new nextlen if available
           for qq in self.q:
@@ -130,7 +125,7 @@ class BlockStream:
           if elen == extlen:
             raise CryptoError(f"Failed to decrypt block {self.key.hex()} {nblk.hex()} at ({self.ciphertext[p:p+extlen].hex()})[{p}:{p + extlen}]") from None
           self.nonce = noncegen(nblk)
-          pos = self._add_to_queue(p, extlen)
+          self.pos = self._add_to_queue(p, extlen)
     for qq in self.q:
       # Restore file position and nonce to the first unused block
       if qq is self.q[0]:
