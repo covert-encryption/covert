@@ -11,7 +11,7 @@ from time import perf_counter
 import pyperclip
 from tqdm import tqdm
 
-from covert import lazyexec, passphrase, pubkey, tty, util
+from covert import lazyexec, passphrase, pubkey, tty, util, idstore
 from covert.archive import Archive, FileRecord
 from covert.blockstream import decrypt_file, encrypt_file
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
@@ -123,8 +123,39 @@ def main_enc(args):
   padding = .01 * float(args.padding) if args.padding is not None else .05
   if not 0 <= padding <= 3.0:
     raise ValueError('Invalid padding specified. The valid range is 0 to 300 %.')
-  if not (args.askpass or args.passwords or args.recipients or args.recipfiles or args.wideopen):
+  # Passphrase encryption by default if no auth is specified
+  if not (args.idname or args.askpass or args.passwords or args.recipients or args.recipfiles or args.wideopen):
     args.askpass = 1
+  # Convert recipient definitions into keys
+  recipients = []
+  for keystr in args.recipients:
+    try:
+      recipients.append(pubkey.decode_pk(keystr))
+    except ValueError as e:
+      if keystr.startswith("github:"):
+        raise ValueError(f"Unrecognized recipient string. Download a key from Github by -R {keystr}")
+      elif os.path.isfile(keystr):
+        raise ValueError(f"Unrecognized recipient string. Use a keyfile by -R {keystr}")
+      raise
+  for fn in args.recipfiles:
+    recipients += pubkey.read_pk_file(fn)
+  # Unique recipient keys sorted by keystr
+  l = len(recipients)
+  recipients = list(sorted(set(recipients), key=str))
+  if len(recipients) < l:
+    sys.stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
+  # Signatures
+  signatures = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk}
+  signatures = list(sorted(signatures, key=str))
+  # Ask passphrases
+  if args.idname:
+    if len(signatures) > 1: raise ValueError("Only one secret key may be associated with an identity.")
+    if len(recipients) > 1: raise ValueError("Only one recipient key may be associated with an identity.")
+    if idstore.idfilename().exists():
+      idpass, _ = passphrase.ask(f"Master ID passphrase")
+    else:
+      idpass = util.encode(passphrase.generate(5))
+      sys.stderr.write(f" 🗄️  Master ID passphrase: \x1B[32;1m{idpass.decode()}\x1B[0m (creating {idstore.idfilename()})\n")
   numpasswd = args.askpass + len(args.passwords)
   passwords, vispw = [], []
   for i in range(args.askpass):
@@ -137,28 +168,10 @@ def main_enc(args):
   passwords += map(util.encode, args.passwords)
   # Use threaded password hashing for parallel and background operation
   with ThreadPoolExecutor(max_workers=4) as executor:
+    if args.idname:
+      idpwhasher = executor.submit(passphrase.pwhash, idpass)
+      del idpass
     pwhasher = executor.map(passphrase.pwhash, set(passwords))
-    # Convert recipient definitions into keys
-    recipients = []
-    for keystr in args.recipients:
-      try:
-        recipients.append(pubkey.decode_pk(keystr))
-      except ValueError as e:
-        if keystr.startswith("github:"):
-          raise ValueError(f"Unrecognized recipient string. Download a key from Github by -R {keystr}")
-        elif os.path.isfile(keystr):
-          raise ValueError(f"Unrecognized recipient string. Use a keyfile by -R {keystr}")
-        raise
-    for fn in args.recipfiles:
-      recipients += pubkey.read_pk_file(fn)
-    # Unique recipient keys sorted by keystr
-    l = len(recipients)
-    recipients = list(sorted(set(recipients), key=str))
-    if len(recipients) < l:
-      sys.stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
-    # Signatures
-    signatures = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk}
-    signatures = list(sorted(signatures, key=str))
     # Input files
     if not args.files or True in args.files:
       if sys.stdin.isatty():
@@ -170,14 +183,26 @@ def main_enc(args):
         stin = sys.stdin.buffer
       args.files = [stin] + [f for f in args.files if f != True]
     # Collect the password hashing results
-    if passwords and sys.stderr.isatty():
+    if (args.idname or passwords) and sys.stderr.isatty():
       sys.stderr.write("Password hashing... ")
       sys.stderr.flush()
+    if args.idname: idpwhash = idpwhasher.result()
     pwhashes = set(pwhasher)
-    if passwords and sys.stderr.isatty():
+    if (args.idname or passwords) and sys.stderr.isatty():
       sys.stderr.write("\r\x1B[0K")
       sys.stderr.flush()
     del passwords
+    # ID store update
+    if args.idname:
+      idkey, peerkey = idstore.profile(
+        idpwhash,
+        args.idname,
+        idkey=signatures[0] if signatures else None,
+        peerkey=recipients[0] if recipients else None,
+      )
+      signatures = [idkey]
+      recipients = [peerkey]
+  # Prepare for encryption
   a = Archive()
   a.file_index(args.files)
   if signatures:

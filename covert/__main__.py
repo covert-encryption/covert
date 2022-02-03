@@ -45,6 +45,7 @@ Covert {covert.__version__} - A file and message encryptor with strong anonymity
 class Args:
 
   def __init__(self):
+    self.idname = ""
     self.files = []
     self.wideopen = None
     self.askpass = 0
@@ -60,6 +61,7 @@ class Args:
 
 
 encargs = dict(
+  idname='-I --id'.split(),
   askpass='-p --passphrase'.split(),
   passwords='--password'.split(),
   wideopen='--wide-open'.split(),
@@ -74,6 +76,7 @@ encargs = dict(
 )
 
 decargs = dict(
+  idname='-I --id'.split(),
   askpass='-p --passphrase'.split(),
   passwords='--password'.split(),
   identities='-i --identity'.split(),
