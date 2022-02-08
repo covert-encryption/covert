@@ -10,6 +10,7 @@ from covert.gui.decrypt import DecryptView
 from covert.gui.encrypt import NewMessageView
 from covert.gui.util import setup_interrupt_handling
 
+import mmap
 
 class App(QApplication):
   def __init__(self):
@@ -95,8 +96,13 @@ class MainWindow(QMainWindow):
       if not file:
         return
       # TODO: Implement in a thread using mmap instead
-      with open(file, "rb") as f:
-        data = f.read()
+      # PRIOR CODE
+      # with open(file, "rb") as f:
+      #   data = f.read()
+      # MY FIX
+      with open(file, mode="r", encoding="utf8") as f:
+        with mmap.mmap(f.fileno(), length=0, access=mmap.ACCESS_READ) as mmap_obj:
+            data = mmap_obj.read()
       if 40 <= len(data) <= 2 * util.ARMOR_MAX_SIZE:
         # Try reading the file as armored text rather than binary
         with suppress(ValueError):
