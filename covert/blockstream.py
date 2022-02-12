@@ -2,7 +2,7 @@ import collections
 import mmap
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from hashlib import sha512
 from secrets import token_bytes
 
@@ -17,14 +17,14 @@ BS = (1 << 20) - 19  # The maximum block size to use
 
 def decrypt_file(auth, f, archive):
   b = BlockStream()
-  b.decrypt_init(f)
-  if not b.header.key:
-    for a in auth:
-      with suppress(CryptoError):
-        b.authenticate(a)
-        break
-  yield from b.decrypt_blocks()
-  b.verify_signatures(archive)
+  with b.decrypt_init(f):
+    if not b.header.key:
+      for a in auth:
+        with suppress(CryptoError):
+          b.authenticate(a)
+          break
+    yield from b.decrypt_blocks()
+    b.verify_signatures(archive)
 
 class BlockStream:
   def __init__(self):
@@ -33,9 +33,12 @@ class BlockStream:
     self.workers = 8
     self.executor = ThreadPoolExecutor(max_workers=self.workers)
     self.blkhash = None
+    self.file = None
     self.ciphertext = None
     self.q = collections.deque()
     self.pos = 0  # Current position within self.ciphertext; queued for decryption, not decoded
+    self.end = 0
+
 
   def authenticate(self, anykey):
     """Attempt decryption using secret key or password hash"""
@@ -44,6 +47,7 @@ class BlockStream:
     else:
       self.header.try_pass(anykey)
 
+  @contextmanager
   def decrypt_init(self, f):
     self.pos = 0
     if hasattr(f, "__len__"):
@@ -58,6 +62,14 @@ class BlockStream:
       self.end = 0
     size = self._read(1024)
     self.header = Header(self.ciphertext[:size])
+    try:
+      yield
+    finally:
+      self.ciphertext.release()
+      self.ciphertext = None
+      self.file = None
+      self.pos = self.end = 0
+
 
   def _add_to_queue(self, p, extlen, aad=None):
     pos, end = p, p + extlen
