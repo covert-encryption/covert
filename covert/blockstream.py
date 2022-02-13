@@ -154,7 +154,7 @@ class BlockStream:
     a.signatures = []
     # Signature verification
     if a.index.get('s'):
-      signatures = [pubkey.Key(edpk=k) for k in a.index['s']]
+      signatures = [pubkey.Key(pk=k) for k in a.index['s']]
       for key in signatures:
         sz = self._read(self.end - self.pos + 80)
         if sz < 80:

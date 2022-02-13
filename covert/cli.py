@@ -215,7 +215,7 @@ def main_enc(args):
   a = Archive()
   a.file_index(args.files)
   if signatures:
-    a.index['s'] = [s.edpk for s in signatures]
+    a.index['s'] = [s.pk for s in signatures]
   # Output files
   realoutf = open(args.outfile, "wb") if args.outfile else sys.stdout.buffer
   if args.armor or not args.outfile and sys.stdout.isatty():
