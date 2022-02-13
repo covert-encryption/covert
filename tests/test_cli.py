@@ -115,13 +115,13 @@ def test_end_to_end_multiple(covert, tmp_path, mocker):
   )
   assert not cap.out
   assert "foo.txt" in cap.err
-  assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
+  assert "Key[827bc3b2:PK] Signature verified" in cap.err
 
   # Decrypt with passphrase
   cap = covert('dec', '--password', 'verytestysecret', fname)
   assert not cap.out
   assert "foo.txt" in cap.err
-  assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
+  assert "Key[827bc3b2:PK] Signature verified" in cap.err
 
 
 def test_end_to_end_github(covert, tmp_path, mocker):
