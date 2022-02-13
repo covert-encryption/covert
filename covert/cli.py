@@ -187,15 +187,12 @@ def main_enc(args):
         stin = sys.stdin.buffer
       args.files = [stin] + [f for f in args.files if f != True]
     # Collect the password hashing results
-    if (args.idname or passwords) and sys.stderr.isatty():
-      sys.stderr.write("Password hashing... ")
-      sys.stderr.flush()
-    if args.idname: idpwhash = idpwhasher.result()
-    pwhashes = set(pwhasher)
-    if (args.idname or passwords) and sys.stderr.isatty():
-      sys.stderr.write("\r\x1B[0K")
-      sys.stderr.flush()
-    del passwords
+    pwhashes = set()
+    if args.idname or passwords:
+      with tty.status("Password hashing... "):
+        if args.idname: idpwhash = idpwhasher.result()
+        pwhashes = set(pwhasher)
+      del passwords
     # ID store update
     if args.idname:
       # Try until the passphrase works
