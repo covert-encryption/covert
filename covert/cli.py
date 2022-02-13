@@ -119,9 +119,9 @@ def run_decryption(infile, args, b, idkeys):
   for valid, key, text in a.signatures:
     key = idkeys.get(key, key)
     if valid:
-      sys.stderr.write(f" ✅ {key} {text}\n")
+      sys.stderr.write(f" ✅ {text} {key}\n")
     else:
-      sys.stderr.write(f"\x1B[1;31m ❌ {key} {text}\x1B[0m\n")
+      sys.stderr.write(f"\x1B[1;31m ❌ {text} {key}\x1B[0m\n")
 
 
 def main_enc(args):

@@ -170,7 +170,7 @@ class BlockStream:
           continue
         try:
           xed_verify(key.pk, self.blkhash, signature)
-          a.signatures.append((True, key, 'Signature verified'))
+          a.signatures.append((True, key, 'Signed by'))
         except CryptoError:
           a.signatures.append((False, key, 'Forged signature'))
 
