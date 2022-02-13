@@ -18,7 +18,7 @@ from covert.blockstream import BlockStream, decrypt_file, encrypt_file
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 
 
-def run_decryption(infile, args, b):
+def run_decryption(infile, args, b, idkeys):
   a = Archive()
   progress = None
   outdir = None
@@ -117,6 +117,7 @@ def run_decryption(infile, args, b):
     sys.stderr.write(f" 🔑 Unlocked with {b.header.authkey}\n")
   sys.stderr.write(f' 🔷 File hash: {a.filehash[:12].hex()}\n')
   for valid, key, text in a.signatures:
+    key = idkeys.get(key, key)
     if valid:
       sys.stderr.write(f" ✅ {key} {text}\n")
     else:
@@ -330,15 +331,19 @@ def main_dec(args):
       infile = mmap.mmap(infile.fileno(), 0, access=mmap.ACCESS_READ)
   b = BlockStream()
   with b.decrypt_init(infile):
+    idkeys = {}
     # Authenticate
     with ThreadPoolExecutor(max_workers=4) as executor:
       pwhasher = lazyexec.map(executor, passphrase.pwhash, {util.encode(pwd) for pwd in args.passwords})
       def authgen():
+        nonlocal idkeys
         yield from identities
         with tty.status("Password hashing... "):
           yield from pwhasher
           if idstore.idfilename.exists():
-            yield from idstore.authgen(passphrase.pwhash(passphrase.ask("Master ID passphrase")[0]))
+            idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
+            idkeys = idstore.idkeys(idpwhash)
+            yield from idstore.authgen(idpwhash)
           for i in range(args.askpass):
             yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
       if not b.header.key:
@@ -349,7 +354,7 @@ def main_dec(args):
             break
         auth.close()
     # Decrypt and verify
-    run_decryption(infile, args, b)
+    run_decryption(infile, args, b, idkeys)
 
 
 def main_edit(args):

@@ -110,6 +110,18 @@ def authgen(pwhash):
     except GeneratorExit:
       break
 
+def idkeys(pwhash):
+  keys = {}
+  for idstore in update(pwhash, allow_create=False):
+    for key, value in idstore.items():
+      if "I" in value:
+        k = pubkey.Key(comment=key, sk=value["I"])
+        keys[k] = k
+      elif "i" in value:
+        k = pubkey.Key(comment=key, pk=value["i"])
+        if k not in keys: keys[k] = k
+  return keys
+
 # Example
 I = {
   "id:alice": {
