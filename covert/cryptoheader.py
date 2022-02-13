@@ -43,6 +43,7 @@ class Header:
     self.eph = pubkey.Key(pkhash=self.ciphertext[:32])
     self.slot = "locked"
     self.key = None
+    self.authkey = None
     self.block0pos = None
     self.block0len = None
     with suppress(CryptoError):
@@ -52,6 +53,7 @@ class Header:
 
   def try_key(self, recvkey):
     self._find_slots(pubkey.derive_symkey(self.nonce, recvkey, self.eph))
+    self.authkey = recvkey
 
   def try_pass(self, pwhash):
     authkey = passphrase.authkey(pwhash, self.nonce)

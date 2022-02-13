@@ -9,21 +9,22 @@ from pathlib import Path
 from time import perf_counter
 
 import pyperclip
+from nacl.exceptions import CryptoError
 from tqdm import tqdm
 
-from covert import lazyexec, passphrase, pubkey, tty, util, idstore
+from covert import idstore, lazyexec, passphrase, pubkey, tty, util
 from covert.archive import Archive, FileRecord
-from covert.blockstream import decrypt_file, encrypt_file
+from covert.blockstream import BlockStream, decrypt_file, encrypt_file
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 
 
-def run_decryption(infile, args, auth):
+def run_decryption(infile, args, b):
   a = Archive()
   progress = None
   outdir = None
   f = None
   messages = []
-  for data in a.decode(decrypt_file(auth, infile, a)):
+  for data in a.decode(b.decrypt_blocks()):
     if isinstance(data, dict):
       # Header parsed, check the file list
       for i, infile in enumerate(a.flist):
@@ -111,6 +112,9 @@ def run_decryption(infile, args, auth):
         sys.stderr.write(f"\x1B[0m")
         sys.stderr.flush()
   # Print signatures
+  b.verify_signatures(a)
+  if b.header.authkey:
+    sys.stderr.write(f" 🔑 Unlocked with {b.header.authkey}\n")
   sys.stderr.write(f' 🔷 File hash: {a.filehash[:12].hex()}\n')
   for valid, key, text in a.signatures:
     if valid:
@@ -324,17 +328,28 @@ def main_dec(args):
   else:
     with suppress(OSError):
       infile = mmap.mmap(infile.fileno(), 0, access=mmap.ACCESS_READ)
-  with ThreadPoolExecutor(max_workers=4) as executor:
-    pwhasher = lazyexec.map(executor, passphrase.pwhash, {util.encode(pwd) for pwd in args.passwords})
-    def authgen():
-      yield from identities
-      with tty.status("Password hashing... "):
-        yield from pwhasher
-        if idstore.idfilename.exists():
-          yield from idstore.authgen(passphrase.pwhash(passphrase.ask("Master ID passphrase")[0]))
-        for i in range(args.askpass):
-          yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
-    run_decryption(infile, args, authgen())
+  b = BlockStream()
+  with b.decrypt_init(infile):
+    # Authenticate
+    with ThreadPoolExecutor(max_workers=4) as executor:
+      pwhasher = lazyexec.map(executor, passphrase.pwhash, {util.encode(pwd) for pwd in args.passwords})
+      def authgen():
+        yield from identities
+        with tty.status("Password hashing... "):
+          yield from pwhasher
+          if idstore.idfilename.exists():
+            yield from idstore.authgen(passphrase.pwhash(passphrase.ask("Master ID passphrase")[0]))
+          for i in range(args.askpass):
+            yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
+      if not b.header.key:
+        auth = authgen()
+        for a in auth:
+          with suppress(CryptoError):
+            b.authenticate(a)
+            break
+        auth.close()
+    # Decrypt and verify
+    run_decryption(infile, args, b)
 
 
 def main_edit(args):

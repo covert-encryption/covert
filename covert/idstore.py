@@ -2,13 +2,14 @@ import mmap
 import os
 import subprocess
 from contextlib import suppress
+from copy import copy
 from pathlib import Path
+
 from xdg import xdg_config_home
 
 from covert import passphrase, pubkey
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
-
 
 confdir = xdg_config_home() / "covert"
 idfilename = confdir / "idstore"
@@ -73,14 +74,31 @@ def profile(pwhash, idstr, idkey=None, peerkey=None):
       peer = f".{passphrase.generate(2)}"
       if f"id:{local}:{peer}" in idstore: peer = None
     tagpeer = f"id:{local}:{peer}"
-    if not (peerkey or tagpeer in idstore):
+    # Allow using local IDs as peers
+    taglocalpeer = f"id:{peer}"
+    if local == peer or taglocalpeer in idstore:
+      if peerkey: raise ValueError(f"ID {peer} already in store as a local user, cannot have a recipient key specified.")
+    else:
+      taglocalpeer = None
+    if not (taglocalpeer or peerkey or tagpeer in idstore):
       raise ValueError("Peer not in ID store. You need to specify a recipient public key on the first use.")
+    # Load/generate keys if needed
+    if not idkey:
+      idkey = pubkey.Key(sk=idstore[tagself]["I"]) if tagself in idstore else pubkey.Key()
+    if taglocalpeer:
+      peerkey = idkey if local == peer else pubkey.Key(sk=idstore[taglocalpeer]["I"])
+    elif not peerkey:
+      peerkey = pubkey.Key(pk=idstore[tagpeer]["i"])
     # Add/update records
-    if tagself not in idstore: idstore[tagself] = dict(I=pubkey.Key().sk)
+    if tagself not in idstore: idstore[tagself] = dict()
     if tagpeer not in idstore: idstore[tagpeer] = dict()
-    if idkey: idstore[tagself]["I"] = idkey.sk
-    if peerkey: idstore[tagpeer]["i"] = peerkey.pk
-  return pubkey.Key(comment=local, sk=idstore[tagself]["I"]), pubkey.Key(comment=peer, pk=idstore[tagpeer]["i"])
+    idstore[tagself]["I"] = idkey.sk
+    idstore[tagpeer]["i"] = peerkey.pk
+    idkey = copy(idkey)
+    peerkey = copy(peerkey)
+    idkey.comment = tagself
+    peerkey.comment = tagpeer
+  return idkey, peerkey
 
 
 def authgen(pwhash):
