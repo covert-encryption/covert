@@ -19,7 +19,6 @@ def create(pwhash, idstore=None):
   a.index["I"] = idstore or {}
   # Encrypt in RAM...
   out = b"".join(b for b in encrypt_file((False, [pwhash], [], []), a.encode, a))
-  fn = idfilename()
   if not confdir.exists():
     confdir.mkdir(parents=True)
     if os.name == "posix":
@@ -27,8 +26,8 @@ def create(pwhash, idstore=None):
       # Attempt to disable CoW (in particular with btrfs and zfs)
       ret = subprocess.run(["chattr", "+C", confdir], capture_output=True)  # nosec
   # Write the ID file
-  with open(fn, "xb") as f:
-    if os.name == "posix": fn.chmod(0o600)
+  with open(idfilename, "xb") as f:
+    if os.name == "posix": idfilename.chmod(0o600)
     f.write(out)
 
 

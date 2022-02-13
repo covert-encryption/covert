@@ -155,11 +155,11 @@ def main_enc(args):
   if args.idname:
     if len(signatures) > 1: raise ValueError("Only one secret key may be associated with an identity.")
     if len(recipients) > 1: raise ValueError("Only one recipient key may be associated with an identity.")
-    if idstore.idfilename().exists():
+    if idstore.idfilename.exists():
       idpass, _ = passphrase.ask("Master ID passphrase")
     else:
       idpass = util.encode(passphrase.generate(5))
-      sys.stderr.write(f" 🗄️  Master ID passphrase: \x1B[32;1m{idpass.decode()}\x1B[0m (creating {idstore.idfilename()})\n")
+      sys.stderr.write(f" 🗄️  Master ID passphrase: \x1B[32;1m{idpass.decode()}\x1B[0m (creating {idstore.idfilename})\n")
   numpasswd = args.askpass + len(args.passwords)
   passwords, vispw = [], []
   for i in range(args.askpass):
