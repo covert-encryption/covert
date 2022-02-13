@@ -10,7 +10,7 @@ from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
 
 
-confdir = xdg_config_home() / ".covert"
+confdir = xdg_config_home() / "covert"
 idfilename = confdir / "idstore"
 
 
