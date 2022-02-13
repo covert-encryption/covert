@@ -23,6 +23,8 @@ def decrypt_file(auth, f, archive):
         with suppress(CryptoError):
           b.authenticate(a)
           break
+      # In case auth is a generator, close it immediately (otherwise would be delayed)
+      if hasattr(auth, "close"): auth.close()
     yield from b.decrypt_blocks()
     b.verify_signatures(archive)
 

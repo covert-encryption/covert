@@ -144,15 +144,19 @@ def main_enc(args):
   recipients = list(sorted(set(recipients), key=str))
   if len(recipients) < l:
     sys.stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
+  if args.idname and len(recipients) > 1:
+    raise ValueError("Only one recipient may be specified for ID store.")
   # Signatures
   signatures = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk}
   signatures = list(sorted(signatures, key=str))
+  if args.idname and len(signatures) > 1:
+    raise ValueError("Only one secret key may be specified for ID store.")
   # Ask passphrases
   if args.idname:
     if len(signatures) > 1: raise ValueError("Only one secret key may be associated with an identity.")
     if len(recipients) > 1: raise ValueError("Only one recipient key may be associated with an identity.")
     if idstore.idfilename().exists():
-      idpass, _ = passphrase.ask(f"Master ID passphrase")
+      idpass, _ = passphrase.ask("Master ID passphrase")
     else:
       idpass = util.encode(passphrase.generate(5))
       sys.stderr.write(f" 🗄️  Master ID passphrase: \x1B[32;1m{idpass.decode()}\x1B[0m (creating {idstore.idfilename()})\n")
@@ -194,12 +198,20 @@ def main_enc(args):
     del passwords
     # ID store update
     if args.idname:
-      idkey, peerkey = idstore.profile(
-        idpwhash,
-        args.idname,
-        idkey=signatures[0] if signatures else None,
-        peerkey=recipients[0] if recipients else None,
-      )
+      # Try until the passphrase works
+      while True:
+        try:
+          idkey, peerkey = idstore.profile(
+            idpwhash,
+            args.idname,
+            idkey=signatures[0] if signatures else None,
+            peerkey=recipients[0] if recipients else None,
+          )
+          break
+        except ValueError as e:
+          # TODO: Add different exception types to avoid this check
+          if "Not authenticated" not in str(e): raise
+        idpwhash = passphrase.pwhash(passphrase.ask("Wrong password, try again. Master ID passphrase")[0])
       signatures = [idkey]
       recipients = [peerkey]
   # Prepare for encryption
@@ -318,20 +330,13 @@ def main_dec(args):
   with ThreadPoolExecutor(max_workers=4) as executor:
     pwhasher = lazyexec.map(executor, passphrase.pwhash, {util.encode(pwd) for pwd in args.passwords})
     def authgen():
-      it = itertools.chain(identities, pwhasher, (passphrase.pwhash(passphrase.ask('Passphrase')[0]) for i in range(args.askpass)))
-      while True:
-        if sys.stderr.isatty():
-          sys.stderr.write("Password hashing... ")
-          sys.stderr.flush()
-        try:
-          pwhash = next(it)
-        except StopIteration:
-          break
-        finally:
-          if sys.stderr.isatty():
-            sys.stderr.write("\r\x1B[0K")
-            sys.stderr.flush()
-        yield pwhash
+      yield from identities
+      with tty.status("Password hashing... "):
+        yield from pwhasher
+        if idstore.idfilename.exists():
+          yield from idstore.authgen(passphrase.pwhash(passphrase.ask("Master ID passphrase")[0]))
+        for i in range(args.askpass):
+          yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
     run_decryption(infile, args, authgen())
 
 
