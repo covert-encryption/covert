@@ -1,34 +1,21 @@
 import mmap
-import os
-import subprocess
 from contextlib import suppress
 from copy import copy
 from pathlib import Path
 
-from xdg import xdg_config_home
-
 from covert import passphrase, pubkey
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
-
-confdir = xdg_config_home() / "covert"
-idfilename = confdir / "idstore"
-
+from covert.path import create_confdir, idfilename
 
 def create(pwhash, idstore=None):
   a = Archive()
   a.index["I"] = idstore or {}
   # Encrypt in RAM...
   out = b"".join(b for b in encrypt_file((False, [pwhash], [], []), a.encode, a))
-  if not confdir.exists():
-    confdir.mkdir(parents=True)
-    if os.name == "posix":
-      confdir.chmod(0o700)
-      # Attempt to disable CoW (in particular with btrfs and zfs)
-      ret = subprocess.run(["chattr", "+C", confdir], capture_output=True)  # nosec
+  create_confdir()
   # Write the ID file
   with open(idfilename, "xb") as f:
-    if os.name == "posix": idfilename.chmod(0o600)
     f.write(out)
 
 
