@@ -6,6 +6,20 @@ from contextlib import contextmanager
 from shutil import get_terminal_size
 
 
+@contextmanager
+def status(message):
+  """Write a temporary status message that is cleared once processing is complete."""
+  if sys.stderr.isatty():
+    sys.stderr.write(message)
+    sys.stderr.flush()
+    try:
+      yield
+    finally:
+      sys.stderr.write("\r\x1B[0K")
+      sys.stderr.flush()
+  else:
+    yield
+
 def editor(data=""):
   with fullscreen() as term:
     term.write(f'\x1B[1;1H\x1B[1;44m   〰 ENTER MESSAGE 〰   (ESC to finish)\x1B[0K\x1B[0m\n')
