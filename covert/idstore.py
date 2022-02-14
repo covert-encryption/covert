@@ -1,4 +1,5 @@
 import mmap
+import os
 from contextlib import suppress
 from copy import copy
 from pathlib import Path
@@ -7,6 +8,7 @@ from covert import passphrase, pubkey
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
 from covert.path import create_confdir, idfilename
+
 
 def create(pwhash, idstore=None):
   a = Archive()
@@ -19,11 +21,23 @@ def create(pwhash, idstore=None):
     f.write(out)
 
 
-def update(pwhash, allow_create=True):
+def delete_entire_idstore():
+  """Securely erase the entire idstore. Config folder is removed if empty."""
+  with open(idfilename, "r+b") as f, mmap.mmap(f.fileno(), 0) as m:
+    m[:] = bytes(len(m))
+    os.fsync(f.fileno())
+  idfilename.unlink()
+  with suppress(OSError):
+    idfilename.parent.rmdir()
+
+
+def update(pwhash, allow_create=True, new_pwhash=None):
+  if not new_pwhash:
+    new_pwhash = pwhash
   if allow_create and not idfilename.exists():
     idstore = {}
     yield idstore
-    if idstore: create(pwhash, idstore)
+    if idstore: create(new_pwhash, idstore)
     return
   with open(idfilename, "r+b") as f, mmap.mmap(f.fileno(), 0) as m:
     # Decrypt everything to RAM
@@ -42,7 +56,7 @@ def update(pwhash, allow_create=True):
     a.fds = [BytesIO(f.data) for f in a.flist]
     a.random_padding(p=0.2)
     # Encrypt in RAM...
-    out = b"".join(b for b in encrypt_file((False, [pwhash], [], []), a.encode, a))
+    out = b"".join(b for b in encrypt_file((False, [new_pwhash], [], []), a.encode, a))
     # Overwrite the ID file
     if len(m) < len(out): m.resize(len(out))
     m[:len(out)] = out

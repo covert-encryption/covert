@@ -91,6 +91,7 @@ def autocomplete(pwd, pos):
 
 
 def ask(prompt, create=False):
+  wordcount = 4 if create is True else create
   with fullscreen() as term:
     autohint = ''
     pwd = ''  # nosec
@@ -136,13 +137,13 @@ def ask(prompt, create=False):
         elif ch == "ENTER":
           if valid: return util.encode(pwd), visible
           if create:
-            pwd = generate()
+            pwd = generate(wordcount)
             return util.encode(pwd), True
         elif ch == "ESC":
           visible = not visible
         elif ch == "TAB":
           if create and not pwd:
-            pwd = generate()
+            pwd = generate(wordcount)
             pos = len(pwd)
             visible = True
           else:

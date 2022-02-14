@@ -1,15 +1,18 @@
 import os
 import sys
 from typing import NoReturn
+
 import colorama
+
 import covert
-from covert.cli import main_benchmark, main_dec, main_edit, main_enc
+from covert.cli import main_benchmark, main_dec, main_edit, main_enc, main_id
 
 hdrhelp = """\
 Usage:
   covert enc [files] [recipients] [signatures] [-A | -o unsuspicious.dat [-a]]
   covert dec [-A | unsuspicious.dat] [-i id_ed25519] [-o filesfolder]
   covert edit unsuspicious.dat — change text in a passphrase-protected archive
+  covert id alice:bob [options]
   covert benchmark
 
 Note: covert enc/dec without arguments ask for password and message. Files and
@@ -30,6 +33,15 @@ dechelp = """\
   -A                Auto copy&paste: ciphertext is pasted
   -i SKEY           Decrypt with secret key (token or file)
   -o FILEFOLDER     Extract any attached files to
+"""
+
+idhelp = """\
+  -s --secret       Show secret keys (by default only shows public keys)
+  -p --passphrase   Change Master ID passphrase
+  -r PKEY -R FILE   Change/set the public key associated with ID local:peer
+  -i SKEY           Change the secret key of the given local ID
+  -D --delete       Delete the ID (local and all its peers, or the given peer)
+  --delete-entire-idstore  Securely erase the entire ID storage
 """
 
 cmdhelp = f"""\
@@ -58,6 +70,9 @@ class Args:
     self.armor = None
     self.paste = None
     self.debug = None
+    self.delete_entire_idstore = False
+    self.delete = False
+    self.secret = False
 
 
 encargs = dict(
@@ -85,6 +100,17 @@ decargs = dict(
   debug='--debug'.split(),
 )
 
+idargs = dict(
+  askpass='-p --passphrase'.split(),
+  recipients='-r --recipient'.split(),
+  recipfiles='-R --keyfile --recipients-file'.split(),
+  identities='-i --identity'.split(),
+  secret='-s --secret'.split(),
+  delete_entire_idstore='--delete-entire-idstore'.split(),
+  delete='-D --delete'.split(),
+  debug='--debug'.split(),
+)
+
 editargs = dict(debug='--debug'.split(),)
 benchargs = dict(debug='--debug'.split(),)
 
@@ -93,6 +119,7 @@ modes = {
   "enc": main_enc,
   "dec": main_dec,
   "edit": main_edit,
+  "id": main_id,
   "benchmark": main_benchmark,
 }
 
@@ -123,9 +150,11 @@ def argparse():
   if av[0] in ('enc', 'encrypt', '-e'):
     args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
   elif av[0] in ('dec', 'decrypt', '-d'):
-    args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
+    args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\nDecryption options:\n{dechelp}"
   elif av[0] in ('edit'):
     args.mode, ad, modehelp = 'edit', editargs, f"{hdrhelp}"
+  elif av[0] in ('id'):
+    args.mode, ad, modehelp = 'id', idargs, f"{hdrhelp}\nIDstore options:\n{idhelp}"
   elif av[0] in ('bench', 'benchmark'):
     args.mode, ad, modehelp = 'benchmark', benchargs, f"{hdrhelp}"
   else:
