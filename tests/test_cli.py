@@ -4,7 +4,7 @@ from io import BytesIO, TextIOWrapper
 
 import pytest
 
-from covert import passphrase
+from covert import passphrase, cli
 from covert.__main__ import argparse, main
 
 
@@ -282,6 +282,7 @@ def test_errors(covert):
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
 
+
 def test_miscellaneous(covert, tmp_path, capsys, mocker):
   """Testing remaining spots to gain full coverage."""
   fname = tmp_path / "test.dat"
@@ -331,3 +332,17 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
   cap = covert("-eR", "tests/keys/ssh_ed25519.pub", fname, exitcode=3)
   assert not cap.out
   assert "I/O error (broken pipe)" in cap.err
+
+
+def test_files_count():
+  sys.argv = "covert dec testfile1.txt testfile2.txt".split()
+  args = argparse()
+  with pytest.raises(ValueError) as exc:
+    cli.main_dec(args)
+  assert "Only one input file is allowed when decrypting" in str(exc.value)
+
+  sys.argv = "covert edit".split()
+  args = argparse()
+  with pytest.raises(ValueError) as exc:
+    cli.main_edit(args)
+  assert "Edit mode requires an encrypted archive filename" in str(exc.value)
