@@ -67,6 +67,16 @@ def test_ssh_key_decoding():
   assert pk == sk
 
 
+def test_file_not_found():
+  with pytest.raises(ValueError) as exc:
+    pk, = pubkey.read_pk_file("tests/keys/non-existent-file.pub")
+  assert "Keyfile" in str(exc.value)
+
+  with pytest.raises(ValueError) as exc:
+    sk, = pubkey.read_sk_file("tests/keys/non-existent-file")
+  assert "Secret key file" in str(exc.value)
+
+
 def test_ssh_pw_keyfile(mocker):
   mocker.patch('covert.passphrase.ask', return_value=(b"password", True))
   sk, = pubkey.read_sk_file("tests/keys/ssh_ed25519_password")

@@ -98,3 +98,13 @@ def test_normalization():
   assert util.encode(win) == b'\xe1\xb9\xa9'
   assert util.encode(mac) == b'\xe1\xb9\xa9'
   assert util.encode(src) == b'\xe1\xb9\xa9'
+
+
+def test_pw_length():
+  with pytest.raises(ValueError) as exc:
+    passphrase.pwhash(b'a')
+  assert "Too short" in str(exc.value)
+
+  with pytest.raises(Exception) as exc:
+    passphrase.authkey(b'a', b'a')
+  assert "Invalid arguments" in str(exc.value)
