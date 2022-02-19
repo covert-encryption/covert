@@ -7,7 +7,7 @@ from pathlib import Path
 from covert import passphrase, pubkey
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
-from covert.path import create_confdir, idfilename
+from covert.path import create_datadir, idfilename
 
 
 def create(pwhash, idstore=None):
@@ -15,7 +15,7 @@ def create(pwhash, idstore=None):
   a.index["I"] = idstore or {}
   # Encrypt in RAM...
   out = b"".join(b for b in encrypt_file((False, [pwhash], [], []), a.encode, a))
-  create_confdir()
+  create_datadir()
   # Write the ID file
   with open(idfilename, "xb") as f:
     f.write(out)

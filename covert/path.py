@@ -1,15 +1,15 @@
 import os
 import subprocess
 
-from xdg import xdg_config_home
+from xdg import xdg_data_home
 
-confdir = xdg_config_home() / "covert"
-idfilename = confdir / "idstore"
+datadir = xdg_data_home() / "covert"
+idfilename = datadir / "idstore"
 
-def create_confdir():
-  if not confdir.exists():
-    confdir.mkdir(parents=True)
+def create_datadir():
+  if not datadir.exists():
+    datadir.mkdir(parents=True)
     if os.name == "posix":
-      confdir.chmod(0o700)
+      datadir.chmod(0o700)
       # Attempt to disable CoW (in particular with btrfs and zfs)
-      ret = subprocess.run(["chattr", "+C", confdir], capture_output=True)  # nosec
+      ret = subprocess.run(["chattr", "+C", datadir], capture_output=True)  # nosec
