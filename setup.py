@@ -29,7 +29,7 @@ setup(
     "zxcvbn-covert>=5.0.1",
   ],
   extras_require={
-    "gui": ["pyside6>=6.2.1", "show-in-file-manager>=1.1.2"],
+    "gui": ["pyside6>=6.2.1", "show-in-file-manager>=1.1.3"],
     "test": ["pytest", "pytest-sugar", "pytest-mock", "coverage", "mypy", "bandit"],
     "dev": ["tox", "isort", "yapf"],
   },
