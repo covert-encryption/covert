@@ -5,18 +5,23 @@ import colorama
 import covert
 from covert.cli import main_benchmark, main_dec, main_edit, main_enc
 
-hdrhelp = """\
+basicusage = """\
 Usage:
   covert enc [files] [recipients] [signatures] [-A | -o unsuspicious.dat [-a]]
   covert dec [-A | unsuspicious.dat] [-i id_ed25519] [-o filesfolder]
   covert edit unsuspicious.dat — change text in a passphrase-protected archive
-  covert benchmark
-
-Note: covert enc/dec without arguments ask for password and message. Files and
-folders get attached together with a message if 'enc -' is specified.
 """
 
-enchelp = """\
+shorthdrhelp = f"""\
+{basicusage}\
+  covert help — show full command line help
+
+Running covert enc/dec without arguments asks for a password and a message.
+Files and folders get attached together with a message if 'enc -' is specified.
+"""
+
+# Short command line help
+shortenchelp = """\
   -p                Passphrase recipient (default)
   --wide-open       Anyone can open the file (no recipients)
   -r PKEY -R FILE   Recipient pubkey, .pub file or github:username
@@ -26,25 +31,76 @@ enchelp = """\
   --pad PERCENT     Preferred padding amount (default 5 %)
 """
 
-dechelp = """\
+shortdechelp = """\
   -A                Auto copy&paste: ciphertext is pasted
   -i SKEY           Decrypt with secret key (token or file)
   -o FILEFOLDER     Extract any attached files to
 """
 
-cmdhelp = f"""\
+introduction = f"""\
 Covert {covert.__version__} - A file and message encryptor with strong anonymity
  💣  Things encrypted with this developer preview mayn't be readable evermore
+"""
 
+shortcmdhelp = f"""\
+{introduction}
+{shorthdrhelp}
+{shortenchelp}
+{shortdechelp}
+"""
+
+# Full command line help
+hdrhelp = f"""\
+{basicusage}\
+  covert help — show full command line help
+  covert benchmark — run a performance benchmark for decryption and encryption
+
+Running covert enc/dec without arguments asks for a password and a message.
+Files and folders get attached together with a message if 'enc -' is specified.
+"""
+
+enchelp = f"""\
+Encryption options:
+{shortenchelp}\
+  -a                Write base64 encoded output when -o is used
+"""
+
+dechelp = f"""\
+Decryption options:
+{shortdechelp}\
+"""
+
+keyformatshelp = """\
+Supported key formats:
+
+* age1: To generate a key, run: age-keygen
+* ssh-ed25519: To generate a key, run: ssh-keygen -t ed25519
+"""
+
+exampleshelp = """\
+Examples:
+
+* To encrypt a message using an ssh-ed25519 public key, run:
+  - covert enc -R ~/.ssh/myfriend.pub -o file
+  - covert enc -r "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL1hd2CrH/pexUjxNfqhHAaKqGwSmn0+sO/YUXVm9Gt1" -o file
+
+* To decrypt a message using a private ssh-ed25519 key file, run:
+  - covert dec -i ~/.ssh/id_ed25519 file
+"""
+
+cmdhelp = f"""\
+{introduction}
 {hdrhelp}
 {enchelp}
 {dechelp}
+{keyformatshelp}
+{exampleshelp}
 """
-
 
 class Args:
 
   def __init__(self):
+    self.mode = None
     self.files = []
     self.wideopen = None
     self.askpass = 0
@@ -93,6 +149,17 @@ modes = {
   "benchmark": main_benchmark,
 }
 
+def print_help(modehelp: str = None):
+  if modehelp is None:
+    modehelp = shortcmdhelp
+  first, rest = modehelp.rstrip().split('\n', 1)
+  print(f'\x1B[1;44m{first:78}\x1B[0m\n{rest}')
+  sys.exit(0)
+
+def print_version():
+  print(shortcmdhelp.split('\n')[0])
+  sys.exit(0)
+
 def needhelp(av):
   """Check for -h and --help but not past --"""
   for a in av:
@@ -103,30 +170,37 @@ def needhelp(av):
 def argparse():
   # Custom parsing due to argparse module's limitations
   av = sys.argv[1:]
-  if not av or needhelp(av):
-    first, rest = cmdhelp.rstrip().split('\n', 1)
-    print(f'\x1B[1;44m{first:78}\x1B[0m\n{rest}')
-    sys.exit(0)
+  if not av:
+    print_help()
+
   if any(a.lower() in ('-v', '--version') for a in av):
-    print(cmdhelp.split('\n')[0])
-    sys.exit(0)
+    print_version()
+
   ad = {}
   args = Args()
+  modehelp = None
   # Separate mode selector from other arguments
-  if av[0].startswith("-") and len(av[0]) > 2:
-    av.insert(1, f'-{av[0][2:]}')
-    av[0] = av[0][:2]
+  if av[0].startswith("-") and len(av[0]) > 2 and not needhelp(av):
+      av.insert(1, f'-{av[0][2:]}')
+      av[0] = av[0][:2]
+
   # Support a few other forms for Age etc. compatibility (but only as the first arg)
   if av[0] in ('enc', 'encrypt', '-e'):
-    args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
+    args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\n{enchelp}"
   elif av[0] in ('dec', 'decrypt', '-d'):
-    args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\nEncryption options:\n{enchelp}"
-  elif av[0] in ('edit'):
-    args.mode, ad, modehelp = 'edit', editargs, f"{hdrhelp}"
+    args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\n{dechelp}"
+  elif av[0] in ('edit', ):
+    args.mode, ad, modehelp = 'edit', editargs, hdrhelp
   elif av[0] in ('bench', 'benchmark'):
-    args.mode, ad, modehelp = 'benchmark', benchargs, f"{hdrhelp}"
-  else:
-    sys.stderr.write(' 💣  Invalid or missing command (enc/dec/edit/benchmark).\n')
+    args.mode, ad, modehelp = 'benchmark', benchargs, hdrhelp
+  elif av[0] in ('help', ):
+    args.mode, ad, modehelp = 'help', {}, cmdhelp
+
+  if args.mode == 'help' or needhelp(av):
+    print_help(modehelp=modehelp)
+
+  if args.mode is None:
+    sys.stderr.write(' 💣  Invalid or missing command (enc/dec/edit/benchmark/help).\n')
     sys.exit(1)
 
   aiter = iter(av[1:])
