@@ -39,6 +39,15 @@ def test_ratchet_pubkey():
   mka2 = a.receive(header2)
   assert mka2 == mkb2
 
+  # Send and receive on current chain (no roundtrip)
+  header4, mkb4 = b.send()
+  header5, mkb5 = b.send()
+  header6, mkb6 = b.send()
+  mka5 = a.receive(header5)
+  assert mka5 == mkb5
+  mka6 = a.receive(header6)
+  assert mka6 == mkb6
+
 
 def test_ratchet_lost_messages():
   alice = Key()
