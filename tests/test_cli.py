@@ -4,7 +4,7 @@ from io import BytesIO, TextIOWrapper
 
 import pytest
 
-from covert import passphrase, cli
+from covert import cli, passphrase, path
 from covert.__main__ import argparse, main
 
 
@@ -248,6 +248,28 @@ def test_end_to_end_edit_armored_stdio(covert, mocker, monkeypatch):
   # Decrypt
   cap = covert("dec", "--password", "verytestysecret", stdin=cap.out)
   assert "edited message" in cap.out
+
+
+def test_idstore(covert, mocker):
+  mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Test environment should set XDG_DATA_DIR outside of standard location
+  assert "/tmp/" in str(path.idfilename)
+
+  # Create ID store
+  cap = covert("id", "alice")
+  assert "Creating" in cap.err
+  assert "Master ID passphrase: verytestysecret" in cap.err
+  assert "id:alice" in cap.out
+  assert "age1" in cap.out
+
+  # List keys
+  cap = covert("id", "alice", "--secret")
+  assert "AGE-SECRET-KEY" in cap.out
+
+  # Shred
+  cap = covert("id", "--delete-entire-idstore")
+  assert f"{path.idfilename} shredded and deleted" in cap.err
 
 
 def test_errors(covert):
