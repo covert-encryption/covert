@@ -1,8 +1,11 @@
+from contextlib import suppress
+
 import nacl.bindings as sodium
 from nacl.exceptions import CryptoError
-from covert.chacha import encrypt, decrypt
-from covert.pubkey import derive_symkey, Key
-from contextlib import suppress
+
+from covert.chacha import decrypt, encrypt
+from covert.pubkey import Key, derive_symkey
+
 
 def chainstep(chainkey: bytes, addn=b""):
   """Perform a chaining step, returns (new chainkey, message key)."""
@@ -38,8 +41,9 @@ class Ratchet:
     self.root = derive_symkey(b"ratchet/init", localkey, peerkey)
     _, self.nh_send = chainstep(self.root, b"hkey")  # Matches Alice's initial nh_recv
     self.localkey = localkey
-    self.skip_until(N)
+    self.idsk = localkey.sk
     self.dhstep(peerkey)
+    self.skip_until(N)
     self.chain_recv, mk = chainstep(self.chain_recv)
     self.Nr += 1
     return mk
@@ -89,7 +93,7 @@ class Ratchet:
         else:
           # Alice's initial messages (but Bob is already initialised)
           ephkey = Key(pkhash=ciphertext[:32])
-          key = derive_symkey(ephkey.pkhash[:12], localkey, ephkey)
+          key = derive_symkey(ephkey.pkhash[:12], Key(sk=self.idsk), ephkey)
           header = decrypt(ciphertext[32:83], None, b"ratchet/init", key)
         self.skipped.remove([hkey, n, mk])
         return mk
@@ -111,7 +115,7 @@ class Ratchet:
           self.dhstep(Key(pk=header[:32]))
           self.skip_until(n)
     if not header:
-      raise CryptoError("Unable to authenticate")
+      raise CryptoError(f"Unable to authenticate")
     # Advance receiving chain
     self.chain_recv, mk = chainstep(self.chain_recv)
     self.Nr += 1
