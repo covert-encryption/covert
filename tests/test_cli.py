@@ -250,8 +250,12 @@ def test_end_to_end_edit_armored_stdio(covert, mocker, monkeypatch):
   assert "edited message" in cap.out
 
 
-def test_idstore(covert, mocker):
+def test_idstore(covert, mocker, tmp_path):
+  outfname = tmp_path / "crypto.covert"
   mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Enable full status messages
+  mocker.patch("sys.stderr.isatty", return_value=True)
 
   # Test environment should set XDG_DATA_DIR outside of standard location
   assert "/tmp/" in str(path.idfilename)
@@ -259,13 +263,30 @@ def test_idstore(covert, mocker):
   # Create ID store
   cap = covert("id", "alice")
   assert "Creating" in cap.err
-  assert "Master ID passphrase: verytestysecret" in cap.err
+  assert "Master ID passphrase:" in cap.err
+  assert "verytestysecret" in cap.err
   assert "id:alice" in cap.out
   assert "age1" in cap.out
 
+  # Encrypt
+  cap = covert("enc", "-I", "alice:testkey", "-i", "tests/keys/ssh_ed25519", "-R", "tests/keys/ssh_ed25519.pub", "-o", outfname)
+  assert "🔗 id:alice:testkey" in cap.err
+  assert "🖋️ id:alice" in cap.err
+
+  # Add secret key
+  #cap = covert("id", "testkey", "-i", "tests/keys/ssh_ed25519")
+  #assert "id:testkey" in cap.out
+
   # List keys
-  cap = covert("id", "alice", "--secret")
+  cap = covert("id", "--secret")
+  assert "id:alice" in cap.out
+  assert "id:alice:testkey" in cap.out
   assert "AGE-SECRET-KEY" in cap.out
+
+  # Decrypt using idstore
+  cap = covert("dec", outfname)
+  assert "Unlocked with id:alice" in cap.err
+  assert "Signed by id:alice" in cap.err
 
   # Shred
   cap = covert("id", "--delete-entire-idstore")
