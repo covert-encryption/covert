@@ -17,6 +17,8 @@ from covert.archive import Archive, FileRecord
 from covert.blockstream import BlockStream, decrypt_file, encrypt_file
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 
+idpwhash = None
+
 
 def run_decryption(infile, args, b, idkeys):
   a = Archive()
@@ -122,6 +124,15 @@ def run_decryption(infile, args, b, idkeys):
       sys.stderr.write(f" ✅ {text} {key}\n")
     else:
       sys.stderr.write(f"\x1B[1;31m ❌ {text} {key}\x1B[0m\n")
+  # Start ratchet?
+  if 'r' in a.index:
+    if not args.idname:
+      sys.stderr.write(f"You can start a conversation with forward secrecy by saving this contact:\n  covert dec --id yourname:theirname\n")
+    else:
+      global idpwhash
+      if not idpwhash:
+        idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
+      idstore.save_contact(idpwhash, args.idname, a, b)
 
 
 def main_enc(args):
@@ -199,11 +210,12 @@ def main_enc(args):
         pwhashes = set(pwhasher)
       del passwords
     # ID store update
+    ratch = None
     if args.idname:
       # Try until the passphrase works
       while True:
         try:
-          idkey, peerkey = idstore.profile(
+          idkey, peerkey, ratch = idstore.profile(
             idpwhash,
             args.idname,
             idkey=signatures[0] if signatures else None,
@@ -219,6 +231,13 @@ def main_enc(args):
   # Prepare for encryption
   a = Archive()
   a.file_index(args.files)
+  if ratch:
+    if ratch.RK:
+      # Enable ratchet mode auth
+      recipients = ratch
+    else:
+      # Advertise ratchet capability and send initial message number
+      a.index['r'] = ratch.s.N
   if signatures:
     a.index['s'] = [s.pk for s in signatures]
   # Output files
@@ -248,14 +267,19 @@ def main_enc(args):
     for block in encrypt_file((args.wideopen, pwhashes, recipients, signatures), a.encode, a):
       progress.update(len(block))
       outf.write(block)
+  # Store ratchet
+  if ratch: idstore.update_ratchet(idpwhash, ratch, a)
   # Pretty output printout
   if sys.stderr.isatty():
     # Print a list of files
     lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
-    methods = "  ".join(
-      [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (numpasswd - len(vispw)) * ["🔑 <pw>"]
-    )
-    methods += f' 🔷 {a.filehash[:12].hex()}'
+    if ratch and ratch.RK:
+      methods = f'🔗 #{ratch.s.CN + ratch.s.N}'
+    else:
+      methods = "  ".join(
+        [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (numpasswd - len(vispw)) * ["🔑 <pw>"]
+      )
+      methods += f' 🔷 {a.filehash[:12].hex()}'
     for id in signatures:
       methods += f"  🖋️ {id}"
     if methods:
@@ -341,6 +365,7 @@ def main_dec(args):
         with tty.status("Password hashing... "):
           yield from pwhasher
           if idstore.idfilename.exists():
+            global idpwhash
             idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
             idkeys = idstore.idkeys(idpwhash)
             yield from idstore.authgen(idpwhash)

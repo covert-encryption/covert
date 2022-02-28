@@ -1,4 +1,6 @@
+import itertools
 from contextlib import suppress
+from time import time
 
 import nacl.bindings as sodium
 from nacl.exceptions import CryptoError
@@ -6,6 +8,13 @@ from nacl.exceptions import CryptoError
 from covert.chacha import decrypt, encrypt
 from covert.pubkey import Key, derive_symkey
 
+MAXSKIP = 20
+
+def expire_soon():
+  return int(time()) + 600  # 10 minutes
+
+def expire_later():
+  return int(time()) + 86400 * 28  # four weeks
 
 def chainstep(chainkey: bytes, addn=b""):
   """Perform a chaining step, returns (new chainkey, message key)."""
@@ -13,117 +22,187 @@ def chainstep(chainkey: bytes, addn=b""):
   return h[:32], h[32:]
 
 
+class SymChain:
+  def __init__(self):
+    self.CK = None
+    self.HK = None
+    self.NHK = None
+    self.CN = 0
+    self.PN = 0
+    self.N = 0
+
+  def store(self):
+    return dict(
+      CK=self.CK,
+      HK=self.HK,
+      NHK=self.NHK,
+      CN=self.CN,
+      PN=self.PN,
+      N=self.N,
+    )
+
+  def load(self, chain):
+    self.CK = chain['CK']
+    self.HK = chain['HK']
+    self.NHK = chain['NHK']
+    self.CN = chain['CN']
+    self.PN = chain['PN']
+    self.N = chain['N']
+
+  def dhstep(self, ratchet, peerkey):
+    shared = derive_symkey(b"ratchet", ratchet.DH, peerkey)
+    self.CN += self.N
+    self.PN = self.N
+    self.N = 0
+    self.HK = self.NHK
+    ratchet.RK, self.CK = chainstep(ratchet.RK, shared)
+    _, self.NHK = chainstep(ratchet.RK, b"hkey")
+
+  def __next__(self):
+    self.CK, MK = chainstep(self.CK)
+    self.N += 1
+    return MK
+
 class Ratchet:
   def __init__(self):
-    self.root = None
-    self.localkey = None
-    self.chain_send = None
-    self.chain_recv = None
-    self.h_recv = self.h_send = None
-    self.nh_recv = self.nh_send = None
-    self.PN = self.Ns = self.Nr = 0
-    self.skipped = []
+    self.RK = None
+    self.DH = None
+    self.s = SymChain()
+    self.r = SymChain()
+    self.msg = []
+    self.pre = []
+    self.e = expire_later()
 
-  def init_alice(self, localkey, peerkey):
-    """Prepare Alice for sending initial message(s) to Bob using his public key."""
-    self.root = derive_symkey(b"ratchet/init", localkey, peerkey)
-    _, self.nh_recv = chainstep(self.root, b"hkey")
-    self.localkey = localkey
-    self._tock(peerkey)
+  def store(self):
+    return dict(
+      RK=self.RK,
+      DH=self.DH.sk if self.DH else None,
+      s=self.s.store(),
+      r=self.r.store(),
+      msg=self.msg,
+      pre=self.pre,
+      e=self.e,
+    )
 
-  def init_bob(self, localkey, ciphertext):
+  def load(self, ratchet):
+    self.RK = ratchet['RK']
+    self.DH = Key(sk=ratchet['DH']) if ratchet['DH'] else None
+    self.s.load(ratchet['s'])
+    self.r.load(ratchet['s'])
+    self.msg = ratchet['msg']
+    self.pre = ratchet['pre']
+    self.e = ratchet['e']
+
+  def prepare_alice(self, shared, localkey):
+    """Alice sends non-ratchet initial message."""
+    self.pre.append(shared)
+    self.pre = self.pre[-MAXSKIP:]
+    self.DH = localkey
+    self.s.N += 1
+    self.e = expire_later()
+
+  def init_bob(self, shared, localkey, peerkey):
     """Bob receives an initial message from Alice, initialise ratchet on Bob side for replies."""
-    ephkey = Key(pkhash=ciphertext[:32])
-    key = derive_symkey(ephkey.pkhash[:12], localkey, ephkey)
-    header = decrypt(ciphertext[32:83], None, b"ratchet/init", key)
-    peerkey = Key(pk=header[:32])
-    N = int.from_bytes(header[32:34], "little")
-    self.root = derive_symkey(b"ratchet/init", localkey, peerkey)
-    _, self.nh_send = chainstep(self.root, b"hkey")  # Matches Alice's initial nh_recv
-    self.localkey = localkey
-    self.idsk = localkey.sk
-    self.dhstep(peerkey)
-    self.skip_until(N)
-    self.chain_recv, mk = chainstep(self.chain_recv)
-    self.Nr += 1
-    return mk
+    self.DH = localkey
+    self.RK = shared
+    self.s.NHK = shared
+    self.dhratchet(peerkey)
+    self.e = expire_later()
 
-  def dhstep(self, peerkey):
-    """ECDH ratchet step, when message with new header key is received."""
-    self.PN = self.Ns
-    self.Ns = self.Nr = 0
-    self.h_recv = self.nh_recv
-    self._tick(peerkey)
-    # Right here we should be in sync with the peer.
-    self.localkey = Key()
-    self.h_send = self.nh_send
-    self._tock(peerkey)
-
-  def _tick(self, peerkey):
-    """DH update receiving keys"""
-    self.root, self.chain_recv = chainstep(self.root, derive_symkey(b"ratchet", self.localkey, peerkey))
-    _, self.nh_recv = chainstep(self.root, b"hkey")
-
-  def _tock(self, peerkey):
-    """DH update sending keys"""
-    self.root, self.chain_send = chainstep(self.root, derive_symkey(b"ratchet", self.localkey, peerkey))
-    _, self.nh_send = chainstep(self.root, b"hkey")
+  def init_alice(self, ciphertext):
+    """Alice's init when receiving initial ratchet reply from Bob."""
+    for hkey, n in itertools.product(self.pre, range(MAXSKIP)):
+      with suppress(CryptoError):
+        header = decrypt(ciphertext[:50], None, n.to_bytes(12, "little"), hkey)
+        break
+    else:
+      raise CryptoError("No ratchet established, unable to decrypt")
+    self.pre = []
+    self.RK = hkey
+    self.r.NHK = hkey
+    self.s.dhstep(self, self.peerkey)
+    self.dhratchet(Key(pk=header[:32]))
+    self.skip_until(n)
+    self.e = expire_later()
+    return self.readmsg()
 
   def send(self, peerkey=None):
-    f = 1  # Flags: 1 means signature
-    if not self.chain_recv:
-      # Alice initial message format
-      ephkey = Key()
-      key = derive_symkey(ephkey.pkhash[:12], ephkey, peerkey)
-      header = ephkey.pkhash + encrypt(self.localkey.pk + (self.Ns & 0xFFFF).to_bytes(2, "little") + f.to_bytes(1, "little"), None, b"ratchet/init", key)
-    else:
-      # Normal ratchet message
-      header = encrypt(self.localkey.pk + self.PN.to_bytes(2, "little") + f.to_bytes(1, "little"), None, self.Ns.to_bytes(12, "little"), self.h_send)
-    self.chain_send, mk = chainstep(self.chain_send)
-    self.Ns += 1
-    return header, mk
+    header = encrypt(self.DH.pk + self.s.PN.to_bytes(2, "little"), None, self.s.N.to_bytes(12, "little"), self.s.HK)
+    self.e = expire_later()
+    return header, next(self.s)
 
   def receive(self, ciphertext):
+    if self.pre:
+      return self.init_alice(ciphertext)
     # Try skipped keys
-    for [hkey, n, mk] in self.skipped:
+    for s in self.msg:
+      hkey, n = s['H'], s['N']
       with suppress(CryptoError):
-        if hkey:
-          # Normal ratchet messages
-          header = decrypt(ciphertext[:51], None, n.to_bytes(12, "little"), hkey)
-        else:
-          # Alice's initial messages (but Bob is already initialised)
-          ephkey = Key(pkhash=ciphertext[:32])
-          key = derive_symkey(ephkey.pkhash[:12], Key(sk=self.idsk), ephkey)
-          header = decrypt(ciphertext[32:83], None, b"ratchet/init", key)
-        self.skipped.remove([hkey, n, mk])
+        header = decrypt(ciphertext[:50], None, n.to_bytes(12, "little"), hkey)
+        s['e'] = expire_soon()
+        s['r'] = True
+        mk = s['M']
+        self.e = expire_later()
         return mk
     header = None
     # Try with current header key
-    if self.h_recv:
-      for n in range(self.Nr, self.Nr + 20):
+    if self.r.HK:
+      for n in range(self.r.N, self.r.N + MAXSKIP):
         with suppress(CryptoError):
-          header = decrypt(ciphertext[:51], None, n.to_bytes(12, "little"), self.h_recv)
+          header = decrypt(ciphertext[:50], None, n.to_bytes(12, "little"), self.r.HK)
           self.skip_until(n)
           break
     # Try with next header key
     if not header:
-      for n in range(20):
+      for n in range(MAXSKIP):
         with suppress(CryptoError):
-          header = decrypt(ciphertext[:51], None, n.to_bytes(12, "little"), self.nh_recv)
+          header = decrypt(ciphertext[:50], None, n.to_bytes(12, "little"), self.r.NHK)
           PN = int.from_bytes(header[32:34], "little")
           self.skip_until(PN)
-          self.dhstep(Key(pk=header[:32]))
+          self.dhratchet(Key(pk=header[:32]))
           self.skip_until(n)
     if not header:
       raise CryptoError(f"Unable to authenticate")
+    self.e = expire_later()
     # Advance receiving chain
-    self.chain_recv, mk = chainstep(self.chain_recv)
-    self.Nr += 1
-    return mk
+    return self.readmsg()
+
+  def dhratchet(self, peerkey):
+    """Perform two DH steps to update all chains."""
+    self.r.dhstep(self, peerkey)
+    self.DH = Key()
+    self.s.dhstep(self, peerkey)
 
   def skip_until(self, n):
     """Advance the receiving chain across all messages prior to message n."""
-    while self.Nr < n:
-      self.chain_recv, mk = chainstep(self.chain_recv)
-      self.skipped.append([self.h_recv, self.Nr, mk])
-      self.Nr += 1
+    while self.r.N < n:
+      self.msg.append(dict(
+        H=self.r.HK,
+        N=self.r.N,
+        M=next(self.r),
+        e=expire_soon(),
+      ))
+
+  def readmsg(self):
+    m = dict(
+      H=self.r.HK,
+      N=self.r.N,
+      M=next(self.r),
+      e=expire_soon(),
+      r=True,
+    )
+    self.msg.append(m)
+    self.msg = self.msg[-MAXSKIP:]
+    return m['M']
+
+
+# Alice sends non-ratchet, includes pk, stores shared secret
+
+# Bob decrypts, calls init_bob, sends ratchet reply nhks=shared
+#  - init RK, recv chain(ii, nhk), new key, send chain(xi)
+
+# Alice receives ratchet reply, shared secret as nhk
+#  - init RK, send chain(ii, nhk),          recv chain(ix), new key, send chain(xx)
+
+# Bob receives reply
+#                                                                  - recv chain(xx), new key, send chain(xx)

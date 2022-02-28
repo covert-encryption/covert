@@ -1,3 +1,5 @@
+from secrets import token_bytes
+
 import pytest
 from nacl.exceptions import CryptoError
 
@@ -9,22 +11,21 @@ def test_ratchet_pubkey():
   alice = Key()
   bob = Key()
   a = Ratchet()
-  a.init_alice(alice, bob)
-  header, mka = a.send(bob)
-  assert len(header) == 83
-  assert mka
-  assert a.Ns == 1
-  assert not a.skipped
-  assert not a.h_send
-  assert a.nh_send
+  shared = token_bytes()
+  a.peerkey = bob
+  a.prepare_alice(shared, alice)
 
   b = Ratchet()
-  mkb = b.init_bob(bob, header)
+  b.init_bob(shared, bob, alice)
+
+  header1, mkb = b.send()
+  mka = a.receive(header1)
+
   assert mka == mkb
-  assert b.Nr == 1
-  assert not b.skipped
-  assert b.h_send
-  assert b.h_send == a.nh_recv
+  assert b.s.N == 1
+  assert a.r.N == 1
+  assert b.s.HK
+  assert b.s.HK == a.r.HK
 
   header2, mkb2 = b.send()
   assert mkb2 != mkb
@@ -53,36 +54,44 @@ def test_ratchet_lost_messages():
   alice = Key()
   bob = Key()
   a = Ratchet()
-  a.init_alice(alice, bob)
-  header0, mka0 = a.send(bob)
-  header1, mka1 = a.send(bob)
-  header2, mka2 = a.send(bob)
-  assert a.Ns == 3
+  shared = [token_bytes(32) for i in range(3)]
+  a.peerkey = bob
+  a.prepare_alice(shared[0], alice)
+  a.prepare_alice(shared[1], alice)
+  a.prepare_alice(shared[2], alice)
+  assert a.s.N == 3
+  assert a.pre == shared
 
   b = Ratchet()
-  mkb1 = b.init_bob(bob, header1)
-  assert mka1 == mkb1
-  assert b.Nr == 2
-  assert len(b.skipped) == 1
+  b.init_bob(shared[1], bob, alice)
 
+  header1, mkb1 = b.send()
+  header2, mkb2 = b.send()
   header3, mkb3 = b.send()
+
+  assert b.s.HK in a.pre
+  assert b.s.N == 3
+
+  mka2 = a.receive(header2)
+
+  assert mka2 == mkb2
+  assert a.r.N == 2
+
   header4, mkb4 = b.send()
-  assert b.Ns == 2
+  assert b.s.N == 4
 
   mka4 = a.receive(header4)
   assert mka4 == mkb4
-  assert a.Nr == 2
-  assert len(a.skipped) == 1
+  assert a.r.N == 4
 
   # Receive out of order
   mka3 = a.receive(header3)
   assert mka3 == mkb3
-  assert not a.skipped
 
   # Receive out of order
-  mkb0 = b.receive(header0)
-  assert mka0 == mkb0
+  mka1 = a.receive(header1)
+  assert mka1 == mkb1
 
   # Fail to decode own message
   with pytest.raises(CryptoError):
-    a.receive(header0)
+    b.receive(header1)

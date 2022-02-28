@@ -8,7 +8,7 @@ from secrets import token_bytes
 
 from nacl.exceptions import CryptoError
 
-from covert import chacha, pubkey
+from covert import chacha, pubkey, ratchet
 from covert.cryptoheader import Header, encrypt_header
 from covert.elliptic import xed_sign, xed_verify
 from covert.util import noncegen
@@ -44,7 +44,9 @@ class BlockStream:
 
   def authenticate(self, anykey):
     """Attempt decryption using secret key or password hash"""
-    if isinstance(anykey, pubkey.Key):
+    if isinstance(anykey, ratchet.Ratchet):
+      self.header.try_ratchet(anykey)
+    elif isinstance(anykey, pubkey.Key):
       self.header.try_key(anykey)
     else:
       self.header.try_pass(anykey)

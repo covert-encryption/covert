@@ -4,7 +4,7 @@ from contextlib import suppress
 from copy import copy
 from pathlib import Path
 
-from covert import passphrase, pubkey
+from covert import passphrase, pubkey, ratchet
 from covert.archive import Archive
 from covert.blockstream import decrypt_file, encrypt_file
 from covert.path import create_datadir, idfilename
@@ -62,7 +62,6 @@ def update(pwhash, allow_create=True, new_pwhash=None):
     m[:len(out)] = out
     if len(m) > 2 * len(out): m.resize(len(m))
 
-
 def profile(pwhash, idstr, idkey=None, peerkey=None):
   """Create/update ID profile"""
   parts = idstr.split(":", 1)
@@ -99,14 +98,50 @@ def profile(pwhash, idstr, idkey=None, peerkey=None):
     peerkey = copy(peerkey)
     idkey.comment = tagself
     peerkey.comment = tagpeer
-  return idkey, peerkey
+    r = ratchet.Ratchet()
+    if "r" in idstore[tagpeer]:
+      r.load(idstore[tagpeer]["r"])
+    else:
+      idstore[tagpeer]["r"] = r.store()
+    # These values are not stored in id store but are kept runtime
+    r.tagpeer = tagpeer
+    r.idkey = idkey
+    r.peerkey = peerkey
+  return idkey, peerkey, r
 
+
+def update_ratchet(pwhash, ratch, a):
+  if 'r' in a.index:
+    ratch.prepare_alice(a.filehash, ratch.idkey)
+  for idstore in update(pwhash):
+    idstore[ratch.tagpeer]["r"] = ratch.store()
+
+def save_contact(pwhash, idname, a, b):
+  localkey = b.header.authkey
+  peerkey = a.signatures[0][1]
+  for idstore in update(pwhash):
+    idstore[f"id:{idname}"] = {}
+    idstore[f"id:{idname}"]["i"] = peerkey.pk
+    if "r" in a.index:
+      r = ratchet.Ratchet()
+      r.init_bob(a.filehash, localkey, peerkey)
+      idstore[f"id:{idname}"]["r"] = r.store()
 
 def authgen(pwhash):
   """Try all authentication keys from the keystore"""
   for idstore in update(pwhash, allow_create=False):
     try:
       for key, value in idstore.items():
+        if "r" in value:
+          r = ratchet.Ratchet()
+          r.load(value['r'])
+          r.peerkey = pubkey.Key(pk=value['i'])
+          try:
+            yield r
+          except GeneratorExit:
+            # If the ratchet was used, store back with changes
+            value['r'] = r.store()
+            raise
         if "I" in value: yield pubkey.Key(comment=key, sk=value["I"])
     except GeneratorExit:
       break
@@ -130,5 +165,13 @@ I = {
   },
   "id:alice:bob": {
     "i": bytes(32),
+    "r": {
+      "pre": [],
+      "msg": [],
+      "DH": bytes(32),
+      "RK": bytes(32),
+      "s": {},
+      "r": {},
+    },
   },
 }
