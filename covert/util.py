@@ -70,7 +70,7 @@ def noncegen(nonce=None):
     nonce = (int.from_bytes(nonce, "little") + 1 & mask).to_bytes(l, "little")
 
 
-def xor(a, b):
+def xor(a, b) -> bytes:
   assert len(a) == len(b)
   l = len(a)
   a = int.from_bytes(a, "little")
@@ -78,7 +78,7 @@ def xor(a, b):
   return (a ^ b).to_bytes(l, "little")
 
 
-def random_padding(size, p):
+def random_padding(size, p) -> int:
   """Calculate random padding size in bytes as (roughly) proportion p of message size."""
   if not p:
     return 0

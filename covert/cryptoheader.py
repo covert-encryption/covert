@@ -5,8 +5,10 @@ from nacl.exceptions import CryptoError
 
 from covert import chacha, passphrase, pubkey, util
 
+from typing import Generator, Tuple, Union, Optional
+from covert.pubkey import Key
 
-def encrypt_header(auth):
+def encrypt_header(auth) -> Tuple[bytes, Generator, bytes]:
   wideopen, pwhashes, recipients, identities = auth
   assert wideopen or pwhashes or recipients, "Must have an authentication method defined"
   assert not wideopen or not (pwhashes or recipients), "Cannot have auth with wide-open"
@@ -35,7 +37,7 @@ def encrypt_header(auth):
 
 
 class Header:
-  def __init__(self, ciphertext):
+  def __init__(self, ciphertext: memoryview):
     if len(ciphertext) < 32:  # 12 nonce + 1 data + 3 nextlen + 16 tag
       raise ValueError("This file is too small to contain encrypted data.")
     self.ciphertext = bytes(ciphertext[:1024])
@@ -50,10 +52,10 @@ class Header:
       self._find_block0(bytes(32), 12)
       self.slot = "wide-open"
 
-  def try_key(self, recvkey):
+  def try_key(self, recvkey: Key):
     self._find_slots(pubkey.derive_symkey(self.nonce, recvkey, self.eph))
 
-  def try_pass(self, pwhash):
+  def try_pass(self, pwhash: bytes):
     authkey = passphrase.authkey(pwhash, self.nonce)
     try:
       self._find_block0(authkey, 12)

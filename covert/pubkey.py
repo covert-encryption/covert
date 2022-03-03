@@ -101,7 +101,7 @@ class Key:
       sodium.crypto_box_open(ciphertext, nonce, self.pk, self.sk)
 
 
-def derive_symkey(nonce, local: Key, remote: Key) -> bytes:
+def derive_symkey(nonce: bytes, local: Key, remote: Key) -> bytes:
   assert local.sk, f"Missing secret key for {local=}"
   shared = sodium.crypto_scalarmult(local.sk, remote.pk)
   return sodium.crypto_hash_sha512(bytes(nonce) + shared)[:32]

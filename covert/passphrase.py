@@ -10,6 +10,8 @@ from covert import util
 from covert.tty import fullscreen
 from covert.wordlist import words
 
+from typing import Tuple
+
 MINLEN = 8  # Bytes, not characters
 ARGON2_MEMLIMIT = 1 << 28  # Bytes (libsodium), as opposed to KiB (other libraries)
 
@@ -26,7 +28,7 @@ def generate(n=4, sep=""):
       return pw
 
 
-def costfactor(pwd: bytes):
+def costfactor(pwd: bytes) -> int:
   """Returns a factor of time cost increase for short passwords."""
   return 1 << max(0, 12 - len(pwd))
 
@@ -45,7 +47,7 @@ def authkey(pwhash: bytes, nonce: bytes) -> bytes:
   return _argon2(32, nonce, pwhash, 2)
 
 
-def _argon2(outlen, passwd, salt, ops):
+def _argon2(outlen: int, passwd: bytes, salt: bytes, ops: int) -> bytes:
   return sodium.crypto_pwhash_alg(
     outlen=outlen,
     passwd=passwd,
@@ -56,7 +58,7 @@ def _argon2(outlen, passwd, salt, ops):
   )
 
 
-def autocomplete(pwd, pos):
+def autocomplete(pwd: str, pos: int) -> Tuple[str, int, str]:
   head, p, tail = '', pwd[:pos], pwd[pos:]
   # Skip already completed words
   while p:
@@ -154,7 +156,7 @@ def ask(prompt, create=False):
           pwd = pwd[:pos] + pwd[pos + 1:]
 
 
-def pwhints(pwd: str):
+def pwhints(pwd: str) -> Tuple[str, bool]:
   maxlen = 20  # zxcvbn gets slow with long passwords
   z = zxcvbn(pwd[:maxlen], user_inputs=sys.argv)
   fb = z["feedback"]

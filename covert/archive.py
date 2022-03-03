@@ -32,19 +32,19 @@ class FileRecord(list):
       raise ValueError('Invalid file meta or corruption of archive.')
 
   @property
-  def size(self):
+  def size(self) -> int:
     return self[0]
 
   @size.setter
-  def size(self, value):
+  def size(self, value: int):
     self[0] = value
 
   @property
-  def name(self):
+  def name(self) -> str:
     return self[1]
 
   @name.setter
-  def name(self, value):
+  def name(self, value: str):
     self[1] = value
 
   def __getitem__(self, index):
@@ -86,6 +86,8 @@ class Archive:
     self.padding = 0
     self.nextfilecb = None
     self.buffer = bytes()
+    self.filehash = None
+    self.signatures = None
 
 
   @property
@@ -333,7 +335,7 @@ class Archive:
 class CombinedIO:
   """Streaming input that returns from a pre-read buffer and then from the file."""
 
-  def __init__(self, buffer, file):
+  def __init__(self, buffer: bytes, file):
     self.buffer = buffer
     self.file = file
 

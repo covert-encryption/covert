@@ -16,6 +16,7 @@ from covert.archive import Archive, FileRecord
 from covert.blockstream import decrypt_file, encrypt_file
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 
+from typing import Generator
 
 def run_decryption(infile, args, auth):
   a = Archive()
