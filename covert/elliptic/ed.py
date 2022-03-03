@@ -159,7 +159,7 @@ LO_index = [(i * pow(q, -1, 8)) % 8 for i in range(8)]
 # Dirty generator (randomises subgroups when multiplied by 0..8*q but is compatible with G)
 D = G + LO[1]
 
-def secret_scalar(edsk) -> int:
+def secret_scalar(edsk: bytes) -> int:
   """
   Converts Ed25519 secret key bytes to a clamped scalar.
 

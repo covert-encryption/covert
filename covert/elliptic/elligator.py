@@ -85,7 +85,7 @@ def egcreate() -> Tuple[bytes, bytes]:
       edsk = token_bytes(32)
       return eghide(edsk), edsk
 
-def eghide(edsk) -> bytes:
+def eghide(edsk: bytes) -> bytes:
   """
   Convert Ed25519 secret key into a random-looking 32-byte string.
   - Deterministic, depends only on edsk
@@ -114,7 +114,7 @@ def eghide(edsk) -> bytes:
   assert elligator & tweak == 0, "The elligator hash and the tweak should not overlap"
   return tobytes(elligator ^ tweak)
 
-def egreveal(hidden) -> EdPoint:
+def egreveal(hidden: str) -> EdPoint:
   """Convert the hidden string back to (a dirty) public key"""
   elligator = toint(hidden) & (1 << 254) - 1
   u, v = fast_hash_to_curve(fe(elligator))
