@@ -112,7 +112,7 @@ def profile(pwhash, idstr, idkey=None, peerkey=None):
 
 def update_ratchet(pwhash, ratch, a):
   if 'r' in a.index:
-    ratch.prepare_alice(a.filehash, ratch.idkey)
+    ratch.prepare_alice(a.filehash[:32], ratch.idkey)
   for idstore in update(pwhash):
     idstore[ratch.tagpeer]["r"] = ratch.store()
 
@@ -124,7 +124,7 @@ def save_contact(pwhash, idname, a, b):
     idstore[f"id:{idname}"]["i"] = peerkey.pk
     if "r" in a.index:
       r = ratchet.Ratchet()
-      r.init_bob(a.filehash, localkey, peerkey)
+      r.init_bob(a.filehash[:32], localkey, peerkey)
       idstore[f"id:{idname}"]["r"] = r.store()
 
 def authgen(pwhash):
@@ -135,6 +135,7 @@ def authgen(pwhash):
         if "r" in value:
           r = ratchet.Ratchet()
           r.load(value['r'])
+          r.idkey = key
           r.peerkey = pubkey.Key(pk=value['i'])
           try:
             yield r

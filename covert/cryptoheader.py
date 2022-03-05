@@ -49,6 +49,7 @@ class Header:
     self.slot = "locked"
     self.key = None
     self.authkey = None
+    self.ratchet = None
     self.block0pos = None
     self.block0len = None
     with suppress(CryptoError):
@@ -60,6 +61,7 @@ class Header:
     authkey = r.receive(self.ciphertext)
     self._find_block0(authkey, 50)
     self.slot = "conversation"
+    self.ratchet = r
 
   def try_key(self, recvkey):
     self._find_slots(pubkey.derive_symkey(self.nonce, recvkey, self.eph))

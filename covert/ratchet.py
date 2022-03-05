@@ -72,6 +72,9 @@ class Ratchet:
     self.msg = []
     self.pre = []
     self.e = expire_later()
+    # Runtime values, not saved
+    self.peerkey = None
+    self.idkey = None
 
   def store(self):
     return dict(
@@ -88,7 +91,7 @@ class Ratchet:
     self.RK = ratchet['RK']
     self.DH = Key(sk=ratchet['DH']) if ratchet['DH'] else None
     self.s.load(ratchet['s'])
-    self.r.load(ratchet['s'])
+    self.r.load(ratchet['r'])
     self.msg = ratchet['msg']
     self.pre = ratchet['pre']
     self.e = ratchet['e']

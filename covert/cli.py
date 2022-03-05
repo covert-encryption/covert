@@ -117,6 +117,8 @@ def run_decryption(infile, args, b, idkeys):
   b.verify_signatures(a)
   if b.header.authkey:
     sys.stderr.write(f" 🔑 Unlocked with {b.header.authkey}\n")
+  elif b.header.ratchet:
+    sys.stderr.write(f" 🔑 Conversation {b.header.ratchet.idkey}\n")
   sys.stderr.write(f' 🔷 File hash: {a.filehash[:12].hex()}\n')
   for valid, key, text in a.signatures:
     key = idkeys.get(key, key)
