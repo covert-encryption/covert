@@ -454,20 +454,21 @@ def main_id(args):
     tagself = tagpeer = None
   if args.delete and not tagself:
     raise ValueError("Need an ID of form yourname or yourname:peername to delete.")
-  if args.recipients:
-    if not tagpeer:
-      raise ValueError("Need an ID of form yourname:peername to assign a public key")
-    if len(args.recipients) > 1:
-      raise ValueError("Only one public be specified for ID store")
+  # Load keys from command line
+  selfkey = peerkey = None
+  if args.recipients or args.recipfiles:
+    if not tagpeer: raise ValueError("Need an ID of form yourname:peername to assign a public key")
+    if len(args.recipients) + len(args.recipfiles) > 1: raise ValueError("Only one public be specified for ID store")
+    peerkey = pubkey.decode_pk(args.recipients[0]) if args.recipients else pubkey.read_pk_file(args.recipfiles[0])[0]
   if args.identities:
-    if not tagself:
-      raise ValueError("Need an ID to assign a secret key.")
-    if len(args.identities) > 1:
-      raise ValueError("Only one secret key may be specified for ID store")
+    if not tagself: raise ValueError("Need an ID to assign a secret key.")
+    if len(args.identities) > 1: raise ValueError("Only one secret key may be specified for ID store")
+    peerkey = pubkey.read_sk_any(args.identities[0])
+  # First run UX
   create_idstore = not idstore.idfilename.exists()
   if create_idstore:
-    if not tagself:
-      raise ValueError("To create a new ID store, specify an ID to create e.g.\n  covert id alice\n")
+    if not tagself: raise ValueError("To create a new ID store, specify an ID to create e.g.\n  covert id alice\n")
+    if tagpeer and not peerkey: raise ValueError(f"No public key provided for new peer {tagpeer}.")
     sys.stderr.write(f" 🗄️  Creating {idstore.idfilename}\n")
   # Passphrases
   idpass = newpass = None
@@ -480,7 +481,7 @@ def main_id(args):
       newpass, visible = passphrase.ask("New Master ID passphrase", create=5)
       newhasher = executor.submit(passphrase.pwhash, newpass)
       if visible:
-        sys.stderr.write(f" 📝  Master ID passphrase: \x1B[32;1m{newpass.decode()}\x1B[0m\n")
+        sys.stderr.write(f" 📝 Master ID passphrase: \x1B[32;1m{newpass.decode()}\x1B[0m\n")
     with tty.status("Password hashing... "):
       idhash = pwhasher.result() if pwhasher else None
       newhash = newhasher.result() if newhasher else None
@@ -491,13 +492,24 @@ def main_id(args):
       if tagpeer:
         del ids[tagpeer]
       else:
+        # Delete ID and all peers connected to it
         del ids[tagself]
+        for k in list(ids):
+          if k.startswith(f"{tagself}:"): del ids[k]
       return
-    if tagself and not tagpeer and tagself not in ids:
+    # Update/add secret key?
+    if tagself and tagself not in ids:
       ids[tagself] = dict()
-      ids[tagself]["I"] = pubkey.Key().sk
-    if args.identities or args.recipients:
-      raise ValueError("Setting keys is not yet implemented")  # TODO
+      if not selfkey:
+        sys.stderr.write(f" 🔗 {tagself} keypair created\n")
+        selfkey = pubkey.Key()
+    if selfkey:
+      ids[tagself]["I"] = selfkey.sk
+    # Update/add peer public key?
+    if tagpeer and tagpeer not in ids:
+      if not peerkey: raise ValueError(f"No public key provided for new peer {tagpeer}.")
+      if tagpeer not in ids: ids[tagpeer] = dict()
+      ids[tagpeer]["i"] = peerkey.pk
     # Print keys
     for key, value in ids.items():
       if tagself and key not in (tagself, tagpeer): continue
@@ -508,7 +520,7 @@ def main_id(args):
         print(f"{key:15} {pk}")
         if args.secret: print(f" ╰─ {sk}")
       elif "i" in value:
-        pubkey.encode_age_pk(pubkey.Key(pk=value["i"]))
+        pk = pubkey.encode_age_pk(pubkey.Key(pk=value["i"]))
         print(f"{key:15} {pk}")
 
 
