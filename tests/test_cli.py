@@ -293,6 +293,62 @@ def test_idstore(covert, mocker, tmp_path):
   assert f"{path.idfilename} shredded and deleted" in cap.err
 
 
+def test_ratchet(covert, mocker, tmp_path):
+  outfname = tmp_path / "crypto.covert"
+  mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Enable full status messages
+  mocker.patch("sys.stderr.isatty", return_value=True)
+
+  # Test environment should set XDG_DATA_DIR outside of standard location
+  assert "/tmp/" in str(path.idfilename)
+
+  # Create IDs
+  cap = covert("id", "alice")
+  assert "age1" in cap.out
+
+  cap = covert("id", "bob")
+  assert "age1" in cap.out
+
+  # Alice encrypts initial message
+  cap = covert("enc", "-I", "alice:bob", "-o", outfname)
+  assert "🔗 id:alice:bob" in cap.err
+  assert "🖋️ id:alice" in cap.err
+
+  # Bob decrypts
+  cap = covert("dec", "-I", "bob:alice", outfname)
+  assert "Unlocked with id:bob" in cap.err
+  assert "Signed by id:alice" in cap.err
+
+  # Bob replies
+  cap = covert("enc", "-I", "bob:alice", "-o", outfname)
+  assert "🔗 #1" in cap.err
+
+  # Alice decrypts
+  cap = covert("dec", outfname)
+  assert "Conversation id:alice:bob" in cap.err
+
+  # Bob sends another (no round-trip, message lost)
+  cap = covert("enc", "-I", "bob:alice", "-o", outfname)
+  assert "🔗 #2" in cap.err
+
+  # Bob sends another (no round-trip)
+  cap = covert("enc", "-I", "bob:alice", "-o", outfname)
+  assert "🔗 #3" in cap.err
+
+  # Alice decrypts
+  cap = covert("dec", outfname)
+  assert "Conversation id:alice:bob" in cap.err
+
+  # Alice replies (first normal ratchet message from her)
+  cap = covert("enc", "-I", "alice:bob", "-o", outfname)
+  assert "🔗 #2" in cap.err
+
+  # Bob decrypts
+  cap = covert("dec", outfname)
+  assert "Conversation id:bob:alice" in cap.err
+
+
 def test_errors(covert):
   cap = covert()
   assert "Usage:" in cap.out
