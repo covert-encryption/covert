@@ -6,13 +6,16 @@ A file begins with a cryptographic header, followed by one or more encrypted aut
 
 `header` `block0` `block1`...`blockN` `signature`*
 
-The header contains tokens neded for decrypting block0, given suitable passwords or private keys. `ephash` stores an ephemeral public key hash, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (short mode) or by stealing bytes of `ephash` (advanced mode). There may be up to 20 recipients, each a shared password or a public key. A short mode is provided for simple cases where 12 bytes header overhead is sufficient. Otherwise the header size is 32 bytes times the number of recipients, although decoy entries filled with random bytes may be added to obscure the number of recipients.
+The header contains tokens neded for decrypting block0, given suitable passwords or private keys. `ephash` stores an ephemeral public key hash, even if only passwords are used (but may be substituted by random bytes then). The nonce is always the initial 12 bytes of a file, either as a separate field (short mode) or by using the initial bytes of `ephash` or `encrheader`. There may be up to 20 recipients, each a shared password or a public key. A short mode is provided for simple cases where 12 bytes header overhead is sufficient. Otherwise the header size is 32 bytes times the number of recipients, although decoy entries filled with random bytes may be added to obscure the number of recipients.
 
 | Header format | Mode | Description |
 |:---|:---|:---|
 | `nonce:12` | Short | Single password `key = argon2(pw, nonce)` or wide-open `key = zeroes(32)`. |
 | `ephash:32` | Advanced | Single pubkey `key = sha512(nonce + ecdh(eph, receiver))[:32]` |
 | `ephash:32` `auth1:32` `auth2:32` ... | Advanced | Multiple authentication methods (pubkeys and/or passwords). |
+| `encrheader:50` | Ratchet | Conversation using Signal's Double Ratchet (forward secrecy). |
+
+The ratchet mode header contains `rkey:32` `PN:2` encrypted with ChaCha20-Poly1305 using previously negotiated header keys. The rkey is used in ECDH exchange to derive new keys, and then the Double Ratchet is used to derive the file key. PN is the number of messages sent using the previous chain, such that skipped or lost messages can be detected by the recipient.
 
 The short mode saves space for the commonly used single password and wide-open cases, versus using the advanced mode. The header is only 12 bytes and the auth key is directly used as the file key used to encrypt all the blocks.
 
@@ -172,6 +175,43 @@ The salt is always `covertpassphrase` (16 bytes)
 |type|Argon2id|
 
 Notice that in this stage the roles of salt and password are reversed because libsodium requires a salt of exactly 16 bytes, matching the pwhash but not the 12-byte nonce.
+
+## Covert Double Ratchet
+
+The ratchet mode enables conversations with **forward secrecy** and self-deleting message keys such that old messages cannot be read later even if one or both parties' keys are breached and the attacker has access to all ciphertext. Further, it provides **post-breach secrecy** such that even after such breach new keys are negotiated within a message round-trip such that no further communication is compromised. Messages may be received out of order or some of them may be lost but the recipient can recover the correct ordering and detect any prior missing messages.
+
+The documentation of ratchet operation is somewhat incomplete, and for implementation you will need to consult Covert source code and Signal's [Double Ratchet with header encryption](https://signal.org/docs/specifications/doubleratchet/#double-ratchet-with-header-encryption)
+
+### Initial messages using public keys
+
+The sender of a public-key encrypted message may signal his capability to support Double Ratchet in replies by adding an `r: N` field in the archive index header. This should only be used when there is a single recipient, as the double ratchet only functions between two parties. Further, both parties will need to use a persistent **idstore** to keep track of the ratchet keys in use. The sender stores locally the filehash of each message sent, which becomes the header encryption key for the initial ratchet reply.
+
+Thus Alice sends a message to Bob, advertising this capability and including her public key or a random ratchet key. Bob can respond using normal public keys but assuming that he chooses to use a ratchet, he needs to initialise in his idstore a new ratchet with the filehash of the incoming message and store it in his idstore. Note that Alice may have sent multiple initial messages, and Bob may respond to any of these, not necessarily reading the others. The initial messages do not have forward secrecy but the message number `N` (0, 1, ...) included in the archive index can be used to track lost messages.
+
+Alice receives the message, not knowing it is from Bob, but trying all her stored keys to decrypt the encrypted header until a match is found with the filehash of the message she sent to Bob earlier. After this Alice initialises her end of the ratchet and expires the filehash from her idstore. Bob may also send multiple replies, and Alice can decrypt any of them using the same filehash but using nonce increments.
+
+### Ratchet operation
+
+After the initial message all further communication uses a protocol closely following Signal protocol. The root key and the initial header key from Bob to Alice is the filehash of the initial message, while all other keys are derived from the chains.
+
+The current message number (reset to 0 after each ratchet step) is not stored within the encrypted header as in Signal, but rather encoded as the header encryption nonce, which is incremented by one on each message. Thus, the recipient tries header decryption with all its known header keys and corresponding nonces with up to 20 into the future (allowing for that many skipped messages). Whenever a message is received using the next header key (rather than the current one), a ratchet step is performed.
+
+Any skipped message keys are stored in idstore for later use but are immediately expired.
+
+### ECDH ratchet step
+
+Within an ECDH step, the root chain is advanced twice, first using the new rkey just received to derive a new chain of receiving keys, and then using a newly created local rkey, deriving a new chain of sending keys. Note that the respective send/receive header keys lag one cycle behind and are updated only after a further round-trip such that the recipient can always decrypt the header he'll need for the new rkey. The change of header key is what triggers the ratchet step in receiving end, using the sender's newly created rkey included in that header.
+
+The next header keys become the current header keys, the current message indices become the previous message indices. The old receiving chain is stepped forward until the PN value received, and after update the new receiving chain is advanced to the message number just received, storing and expiring any message keys retrieved from each chain.
+
+### Key expiration
+
+Expired keys are kept for one hour, to allow re-decrypting received messages, espeacially in CLI operation, and to allow for Alice to decrypt the multiple initial replies that Bob may have sent. For skipped messages the chains are advanced and all skipped message keys are stored but immediately expired.
+
+Unexpired temporary keys should have a longer expiration period such as four weeks, to avoid them being kept indefinitely if the conversation is never continued, or if an adversary is able to block all messages from being delivered.
+
+All key expiration is strictly local. Covert files do not carry expiration timestamps. The actual implementation of expiration is covered by Covert idstore, to be documented in another document.
+
 
 ## Miscellaneus details
 
