@@ -501,7 +501,7 @@ def main_id(args):
     if tagself and tagself not in ids:
       ids[tagself] = dict()
       if not selfkey:
-        sys.stderr.write(f" 🔗 {tagself} keypair created\n")
+        sys.stderr.write(f" 🧑 {tagself} keypair created\n")
         selfkey = pubkey.Key()
     if selfkey:
       ids[tagself]["I"] = selfkey.sk
@@ -522,6 +522,10 @@ def main_id(args):
       elif "i" in value:
         pk = pubkey.encode_age_pk(pubkey.Key(pk=value["i"]))
         print(f"{key:15} {pk}")
+      # Ratchet info
+      if (r := value.get("r")):
+        state = "with forward secrecy" if r["RK"] else "initialising (messages sent but no response yet)"
+        print(f"   conversation {state}")
 
 
 def main_benchmark(args):
