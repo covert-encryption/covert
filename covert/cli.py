@@ -280,8 +280,8 @@ def main_enc(args):
         [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (numpasswd - len(vispw)) * ["🔑 <pw>"]
       )
       methods += f' 🔷 {a.filehash[:12].hex()}'
-    for id in signatures:
-      methods += f"  🖋️ {id}"
+    for s in signatures:
+      methods += f"  🖋️ {s}"
     if methods:
       lock += f"    {methods}"
     if args.outfile:
