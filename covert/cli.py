@@ -460,12 +460,12 @@ def main_id(args):
   selfkey = peerkey = None
   if args.recipients or args.recipfiles:
     if not tagpeer: raise ValueError("Need an ID of form yourname:peername to assign a public key")
-    if len(args.recipients) + len(args.recipfiles) > 1: raise ValueError("Only one public be specified for ID store")
+    if len(args.recipients) + len(args.recipfiles) > 1: raise ValueError("Only one public key may be specified for ID store")
     peerkey = pubkey.decode_pk(args.recipients[0]) if args.recipients else pubkey.read_pk_file(args.recipfiles[0])[0]
   if args.identities:
     if not tagself: raise ValueError("Need an ID to assign a secret key.")
     if len(args.identities) > 1: raise ValueError("Only one secret key may be specified for ID store")
-    peerkey = pubkey.read_sk_any(args.identities[0])
+    selfkey = pubkey.read_sk_any(args.identities[0])[0]
   # First run UX
   create_idstore = not idstore.idfilename.exists()
   if create_idstore:

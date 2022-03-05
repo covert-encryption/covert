@@ -269,24 +269,43 @@ def test_idstore(covert, mocker, tmp_path):
   assert "age1" in cap.out
 
   # Encrypt
-  cap = covert("enc", "-I", "alice:testkey", "-i", "tests/keys/ssh_ed25519", "-R", "tests/keys/ssh_ed25519.pub", "-o", outfname)
+  cap = covert("enc", "-I", "alice:testkey", "-R", "tests/keys/ssh_ed25519.pub", "-o", outfname)
   assert "🔗 id:alice:testkey" in cap.err
   assert "🖋️ id:alice" in cap.err
 
   # Add secret key
-  #cap = covert("id", "testkey", "-i", "tests/keys/ssh_ed25519")
-  #assert "id:testkey" in cap.out
+  cap = covert("id", "bob", "-i", "tests/keys/ssh_ed25519")
+  assert "id:bob" in cap.out
+
+  # Decrypt using idstore
+  cap = covert("dec", outfname)
+  assert "Unlocked with id:bob" in cap.err
+  assert "Signed by id:alice" in cap.err
+
+  # Encrypt with local id as peer
+  cap = covert("enc", "-I", "alice:bob", "-o", outfname)
+  assert "🔗 id:alice:bob" in cap.err
+  assert "🖋️ id:alice" in cap.err
+
+  # Decrypt using idstore
+  cap = covert("dec", outfname)
+  assert "Unlocked with id:bob" in cap.err
+  assert "Signed by id:alice" in cap.err
 
   # List keys
   cap = covert("id", "--secret")
   assert "id:alice" in cap.out
   assert "id:alice:testkey" in cap.out
   assert "AGE-SECRET-KEY" in cap.out
+  assert "id:alice:bob" in cap.out
 
-  # Decrypt using idstore
-  cap = covert("dec", outfname)
-  assert "Unlocked with id:alice" in cap.err
-  assert "Signed by id:alice" in cap.err
+  # Delete peer
+  cap = covert("id", "--delete", "alice:bob")
+  assert f"alice:bob" not in cap.out
+
+  # Delete local
+  cap = covert("id", "--delete", "alice")
+  assert f"alice" not in cap.out
 
   # Shred
   cap = covert("id", "--delete-entire-idstore")
@@ -307,8 +326,8 @@ def test_ratchet(covert, mocker, tmp_path):
   cap = covert("id", "alice")
   assert "age1" in cap.out
 
-  cap = covert("id", "bob")
-  assert "age1" in cap.out
+  cap = covert("id", "bob", "-i", "tests/keys/ageid-age1cghwz85tpv2eutkx8vflzjfa9f96wad6d8an45wcs3phzac2qdxq9dqg5p")
+  assert "age1cghwz85tpv2eutkx8vflzjfa9f96wad6d8an45wcs3phzac2qdxq9dqg5p" in cap.out
 
   # Alice encrypts initial message
   cap = covert("enc", "-I", "alice:bob", "-o", outfname)
@@ -348,6 +367,10 @@ def test_ratchet(covert, mocker, tmp_path):
   cap = covert("dec", outfname)
   assert "Conversation id:bob:alice" in cap.err
 
+  # Shred
+  cap = covert("id", "--delete-entire-idstore")
+  assert f"{path.idfilename} shredded and deleted" in cap.err
+
 
 def test_errors(covert):
   cap = covert()
@@ -380,6 +403,47 @@ def test_errors(covert):
   cap = covert("enc", "-r", "not-a-file-either", exitcode=10)
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
+
+  cap = covert("id", "alice", "bob", exitcode=10)
+  assert not cap.out
+  assert "one ID at most should be specified" in cap.err
+
+  cap = covert("id", "alice", "--delete-entire-idstore", exitcode=10)
+  assert not cap.out
+  assert "No ID should be provided with --delete-entire-idstore" in cap.err
+
+  assert not path.idfilename.exists()
+  cap = covert("id", "--delete-entire-idstore")  # Note: exitcode 0
+  assert not cap.out
+  assert "does not exist" in cap.err
+
+  cap = covert("id", "--delete", exitcode=10)
+  assert not cap.out
+  assert "Need an ID of form yourname or yourname:peername to delete." in cap.err
+
+  cap = covert("id", "-i", "tests/keys/ssh_ed25519.pub", exitcode=10)
+  assert not cap.out
+  assert "Need an ID to assign a secret key." in cap.err
+
+  cap = covert("id", "alice", "-R", "tests/keys/ssh_ed25519.pub", exitcode=10)
+  assert not cap.out
+  assert "Need an ID of form yourname:peername to assign a public key" in cap.err
+
+  cap = covert("id", "alice:bob", "-R", "tests/keys/ssh_ed25519.pub", "-r", "age1fakekey", exitcode=10)
+  assert not cap.out
+  assert "Only one public key may be specified" in cap.err
+
+  cap = covert("id", "alice", "-i", "tests/keys/ssh_ed25519", "-i", "tests/keys/minisign.key", exitcode=10)
+  assert not cap.out
+  assert "Only one secret key may be specified for ID store" in cap.err
+
+  cap = covert("id", exitcode=10)
+  assert not cap.out
+  assert "To create a new ID store, specify an ID to create" in cap.err
+
+  cap = covert("id", "alice:bob", exitcode=10)
+  assert not cap.out
+  assert "No public key provided for new peer id:alice:bob." in cap.err
 
 
 def test_miscellaneous(covert, tmp_path, capsys, mocker):
