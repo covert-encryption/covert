@@ -404,6 +404,10 @@ def test_errors(covert):
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
 
+  cap = covert("enc", "--id", "alice:bob", exitcode=10)
+  assert not cap.out
+  assert "Peer not in ID store. You need to specify a recipient public key on the first use." in cap.err
+
   cap = covert("id", "alice", "bob", exitcode=10)
   assert not cap.out
   assert "one ID at most should be specified" in cap.err
