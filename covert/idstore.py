@@ -158,21 +158,3 @@ def idkeys(pwhash):
         k = pubkey.Key(comment=key, pk=value["i"])
         if k not in keys: keys[k] = k
   return keys
-
-# Example
-I = {
-  "id:alice": {
-    "I": bytes(32),
-  },
-  "id:alice:bob": {
-    "i": bytes(32),
-    "r": {
-      "pre": [],
-      "msg": [],
-      "DH": bytes(32),
-      "RK": bytes(32),
-      "s": {},
-      "r": {},
-    },
-  },
-}
