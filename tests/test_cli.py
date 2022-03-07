@@ -374,16 +374,16 @@ def test_ratchet(covert, mocker, tmp_path):
 
 def test_errors(covert):
   cap = covert()
-  assert "Usage:" in cap.out
+  assert "Covert" in cap.out
   assert not cap.err
 
   cap = covert('-eINvalid', '--help')
-  assert "Usage:" in cap.out
+  assert "Covert" in cap.out
   assert not cap.err
 
   cap = covert('-eINvalid', exitcode=1)
   assert not cap.out
-  assert "not an argument: covert enc -INvalid" in cap.err
+  assert "Unknown argument: covert enc -INvalid (failing -N -v -l -d)" in cap.err
 
   cap = covert("-o", exitcode=1)
   assert not cap.out
@@ -465,7 +465,8 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
   assert "10,485,761 📄 test.dat" in cap.err
 
   cap = covert("-v")
-  assert "A file and message encryptor with strong anonymity" in cap.out
+  assert "A file and message encryptor" not in cap.out
+  assert "Covert " in cap.out
   assert not cap.err
 
   cap = covert("-e", 1, "-z", exitcode=1)
