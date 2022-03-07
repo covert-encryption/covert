@@ -1,106 +1,18 @@
 import os
 import sys
 from typing import NoReturn
+
 import colorama
-import covert
-from covert.cli import main_benchmark, main_dec, main_edit, main_enc
 
-basicusage = """\
-Usage:
-  covert enc [files] [recipients] [signatures] [-A | -o unsuspicious.dat [-a]]
-  covert dec [-A | unsuspicious.dat] [-i id_ed25519] [-o filesfolder]
-  covert edit unsuspicious.dat — change text in a passphrase-protected archive
-"""
+from covert.cli import main_benchmark, main_dec, main_edit, main_enc, main_id
+from covert.clihelp import print_help, print_version
 
-shorthdrhelp = f"""\
-{basicusage}\
-  covert help — show full command line help
-
-Running covert enc/dec without arguments asks for a password and a message.
-Files and folders get attached together with a message if 'enc -' is specified.
-"""
-
-# Short command line help
-shortenchelp = """\
-  -p                Passphrase recipient (default)
-  --wide-open       Anyone can open the file (no recipients)
-  -r PKEY -R FILE   Recipient pubkey, .pub file or github:username
-  -i SKEY           Sign with a secret key (string token or id file)
-  -A                Auto copy&paste: ciphertext is copied
-  -o FILENAME       Encrypted file to output (binary unless -a is used)
-  --pad PERCENT     Preferred padding amount (default 5 %)
-"""
-
-shortdechelp = """\
-  -A                Auto copy&paste: ciphertext is pasted
-  -i SKEY           Decrypt with secret key (token or file)
-  -o FILEFOLDER     Extract any attached files to
-"""
-
-introduction = f"""\
-Covert {covert.__version__} - A file and message encryptor with strong anonymity
- 💣  Things encrypted with this developer preview mayn't be readable evermore
-"""
-
-shortcmdhelp = f"""\
-{introduction}
-{shorthdrhelp}
-{shortenchelp}
-{shortdechelp}
-"""
-
-# Full command line help
-hdrhelp = f"""\
-{basicusage}\
-  covert help — show full command line help
-  covert benchmark — run a performance benchmark for decryption and encryption
-
-Running covert enc/dec without arguments asks for a password and a message.
-Files and folders get attached together with a message if 'enc -' is specified.
-"""
-
-enchelp = f"""\
-Encryption options:
-{shortenchelp}\
-  -a                Write base64 encoded output when -o is used
-"""
-
-dechelp = f"""\
-Decryption options:
-{shortdechelp}\
-"""
-
-keyformatshelp = """\
-Supported key formats:
-
-* age1: To generate a key, run: age-keygen
-* ssh-ed25519: To generate a key, run: ssh-keygen -t ed25519
-"""
-
-exampleshelp = """\
-Examples:
-
-* To encrypt a message using an ssh-ed25519 public key, run:
-  - covert enc -R ~/.ssh/myfriend.pub -o file
-  - covert enc -r "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL1hd2CrH/pexUjxNfqhHAaKqGwSmn0+sO/YUXVm9Gt1" -o file
-
-* To decrypt a message using a private ssh-ed25519 key file, run:
-  - covert dec -i ~/.ssh/id_ed25519 file
-"""
-
-cmdhelp = f"""\
-{introduction}
-{hdrhelp}
-{enchelp}
-{dechelp}
-{keyformatshelp}
-{exampleshelp}
-"""
 
 class Args:
 
   def __init__(self):
     self.mode = None
+    self.idname = ""
     self.files = []
     self.wideopen = None
     self.askpass = 0
@@ -113,9 +25,13 @@ class Args:
     self.armor = None
     self.paste = None
     self.debug = None
+    self.delete_entire_idstore = False
+    self.delete = False
+    self.secret = False
 
 
 encargs = dict(
+  idname='-I --id'.split(),
   askpass='-p --passphrase'.split(),
   passwords='--password'.split(),
   wideopen='--wide-open'.split(),
@@ -130,11 +46,23 @@ encargs = dict(
 )
 
 decargs = dict(
+  idname='-I --id'.split(),
   askpass='-p --passphrase'.split(),
   passwords='--password'.split(),
   identities='-i --identity'.split(),
   outfile='-o --out --output'.split(),
   paste='-A'.split(),
+  debug='--debug'.split(),
+)
+
+idargs = dict(
+  askpass='-p --passphrase'.split(),
+  recipients='-r --recipient'.split(),
+  recipfiles='-R --keyfile --recipients-file'.split(),
+  identities='-i --identity'.split(),
+  secret='-s --secret'.split(),
+  delete_entire_idstore='--delete-entire-idstore'.split(),
+  delete='-D --delete'.split(),
   debug='--debug'.split(),
 )
 
@@ -146,19 +74,9 @@ modes = {
   "enc": main_enc,
   "dec": main_dec,
   "edit": main_edit,
+  "id": main_id,
   "benchmark": main_benchmark,
 }
-
-def print_help(modehelp: str = None):
-  if modehelp is None:
-    modehelp = shortcmdhelp
-  first, rest = modehelp.rstrip().split('\n', 1)
-  print(f'\x1B[1;44m{first:78}\x1B[0m\n{rest}')
-  sys.exit(0)
-
-def print_version():
-  print(shortcmdhelp.split('\n')[0])
-  sys.exit(0)
 
 def needhelp(av):
   """Check for -h and --help but not past --"""
@@ -166,6 +84,15 @@ def needhelp(av):
     if a == '--': return False
     if a.lower() in ('-h', '--help'): return True
   return False
+
+def subcommand(arg):
+  if arg in ('enc', 'encrypt', '-e'): return 'enc', encargs
+  if arg in ('dec', 'decrypt', '-d'): return 'dec', decargs
+  if arg in ('edit'): return 'edit', editargs
+  if arg in ('id'): return 'id', idargs
+  if arg in ('bench', 'benchmark'): return 'benchmark', benchargs
+  if arg in ('help', ): return 'help', {}
+  return None, {}
 
 def argparse():
   # Custom parsing due to argparse module's limitations
@@ -176,31 +103,21 @@ def argparse():
   if any(a.lower() in ('-v', '--version') for a in av):
     print_version()
 
-  ad = {}
   args = Args()
-  modehelp = None
   # Separate mode selector from other arguments
   if av[0].startswith("-") and len(av[0]) > 2 and not needhelp(av):
       av.insert(1, f'-{av[0][2:]}')
       av[0] = av[0][:2]
 
-  # Support a few other forms for Age etc. compatibility (but only as the first arg)
-  if av[0] in ('enc', 'encrypt', '-e'):
-    args.mode, ad, modehelp = 'enc', encargs, f"{hdrhelp}\n{enchelp}"
-  elif av[0] in ('dec', 'decrypt', '-d'):
-    args.mode, ad, modehelp = 'dec', decargs, f"{hdrhelp}\n{dechelp}"
-  elif av[0] in ('edit', ):
-    args.mode, ad, modehelp = 'edit', editargs, hdrhelp
-  elif av[0] in ('bench', 'benchmark'):
-    args.mode, ad, modehelp = 'benchmark', benchargs, hdrhelp
-  elif av[0] in ('help', ):
-    args.mode, ad, modehelp = 'help', {}, cmdhelp
+  args.mode, ad = subcommand(av[0])
 
   if args.mode == 'help' or needhelp(av):
-    print_help(modehelp=modehelp)
+    if args.mode == 'help' and len(av) == 2 and (mode := subcommand(av[1])[0]):
+      print_help(mode)
+    print_help(args.mode or "help")
 
   if args.mode is None:
-    sys.stderr.write(' 💣  Invalid or missing command (enc/dec/edit/benchmark/help).\n')
+    sys.stderr.write(' 💣  Invalid or missing command (enc/dec/edit/id/benchmark/help).\n')
     sys.exit(1)
 
   aiter = iter(av[1:])
@@ -222,8 +139,7 @@ def argparse():
     if not a.startswith('--') and len(a) > 2:
       if any(arg not in shortargs for arg in list(a[1:])):
         falseargs = [arg for arg in list(a[1:]) if arg not in shortargs]
-        sys.stderr.write(f' 💣  {falseargs} is not an argument: covert {args.mode} {a}\n')
-        sys.exit(1)
+        print_help(args.mode, f' 💣  Unknown argument: covert {args.mode} {a} (failing -{" -".join(falseargs)})')
       a = [f'-{shortarg}' for shortarg in list(a[1:]) if shortarg in shortargs]
     if isinstance(a, str):
       a = [a]
@@ -232,8 +148,7 @@ def argparse():
       if isinstance(av, int):
         continue
       if argvar is None:
-        sys.stderr.write(f'{modehelp}\n 💣  Unknown argument: covert {args.mode} {aprint}\n')
-        sys.exit(1)
+        print_help(args.mode, f' 💣  Unknown argument: covert {args.mode} {aprint}')
       try:
         var = getattr(args, argvar)
         if isinstance(var, list):
@@ -245,8 +160,7 @@ def argparse():
         else:
           setattr(args, argvar, True)
       except StopIteration:
-        sys.stderr.write(f'{modehelp}\n 💣  Argument parameter missing: covert {args.mode} {aprint} …\n')
-        sys.exit(1)
+        print_help(args.mode, f' 💣  Argument parameter missing: covert {args.mode} {aprint} …')
 
   return args
 

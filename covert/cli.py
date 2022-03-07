@@ -9,21 +9,24 @@ from pathlib import Path
 from time import perf_counter
 
 import pyperclip
+from nacl.exceptions import CryptoError
 from tqdm import tqdm
 
-from covert import lazyexec, passphrase, pubkey, tty, util
+from covert import idstore, lazyexec, passphrase, pubkey, tty, util
 from covert.archive import Archive, FileRecord
-from covert.blockstream import decrypt_file, encrypt_file
+from covert.blockstream import BlockStream, decrypt_file, encrypt_file
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 
+idpwhash = None
 
-def run_decryption(infile, args, auth):
+
+def run_decryption(infile, args, b, idkeys):
   a = Archive()
   progress = None
   outdir = None
   f = None
   messages = []
-  for data in a.decode(decrypt_file(auth, infile, a)):
+  for data in a.decode(b.decrypt_blocks()):
     if isinstance(data, dict):
       # Header parsed, check the file list
       for i, infile in enumerate(a.flist):
@@ -111,20 +114,70 @@ def run_decryption(infile, args, auth):
         sys.stderr.write(f"\x1B[0m")
         sys.stderr.flush()
   # Print signatures
+  b.verify_signatures(a)
+  if b.header.authkey:
+    sys.stderr.write(f" 🔑 Unlocked with {b.header.authkey}\n")
+  elif b.header.ratchet:
+    sys.stderr.write(f" 🔑 Conversation {b.header.ratchet.idkey}\n")
   sys.stderr.write(f' 🔷 File hash: {a.filehash[:12].hex()}\n')
   for valid, key, text in a.signatures:
+    key = idkeys.get(key, key)
     if valid:
-      sys.stderr.write(f" ✅ {key} {text}\n")
+      sys.stderr.write(f" ✅ {text} {key}\n")
     else:
-      sys.stderr.write(f"\x1B[1;31m ❌ {key} {text}\x1B[0m\n")
+      sys.stderr.write(f"\x1B[1;31m ❌ {text} {key}\x1B[0m\n")
+  # Start ratchet?
+  if 'r' in a.index:
+    if not args.idname:
+      sys.stderr.write(f"You can start a conversation with forward secrecy by saving this contact:\n  covert dec --id yourname:theirname\n")
+    else:
+      global idpwhash
+      if not idpwhash:
+        idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
+      idstore.save_contact(idpwhash, args.idname, a, b)
 
 
 def main_enc(args):
   padding = .01 * float(args.padding) if args.padding is not None else .05
   if not 0 <= padding <= 3.0:
     raise ValueError('Invalid padding specified. The valid range is 0 to 300 %.')
-  if not (args.askpass or args.passwords or args.recipients or args.recipfiles or args.wideopen):
+  # Passphrase encryption by default if no auth is specified
+  if not (args.idname or args.askpass or args.passwords or args.recipients or args.recipfiles or args.wideopen):
     args.askpass = 1
+  # Convert recipient definitions into keys
+  recipients = []
+  for keystr in args.recipients:
+    try:
+      recipients.append(pubkey.decode_pk(keystr))
+    except ValueError as e:
+      if keystr.startswith("github:"):
+        raise ValueError(f"Unrecognized recipient string. Download a key from Github by -R {keystr}")
+      elif os.path.isfile(keystr):
+        raise ValueError(f"Unrecognized recipient string. Use a keyfile by -R {keystr}")
+      raise
+  for fn in args.recipfiles:
+    recipients += pubkey.read_pk_file(fn)
+  # Unique recipient keys sorted by keystr
+  l = len(recipients)
+  recipients = list(sorted(set(recipients), key=str))
+  if len(recipients) < l:
+    sys.stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
+  if args.idname and len(recipients) > 1:
+    raise ValueError("Only one recipient may be specified for ID store.")
+  # Signatures
+  signatures = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk}
+  signatures = list(sorted(signatures, key=str))
+  if args.idname and len(signatures) > 1:
+    raise ValueError("Only one secret key may be specified for ID store.")
+  # Ask passphrases
+  if args.idname:
+    if len(signatures) > 1: raise ValueError("Only one secret key may be associated with an identity.")
+    if len(recipients) > 1: raise ValueError("Only one recipient key may be associated with an identity.")
+    if idstore.idfilename.exists():
+      idpass, _ = passphrase.ask("Master ID passphrase")
+    else:
+      idpass = util.encode(passphrase.generate(5))
+      sys.stderr.write(f" 🗄️  Master ID passphrase: \x1B[32;1m{idpass.decode()}\x1B[0m (creating {idstore.idfilename})\n")
   numpasswd = args.askpass + len(args.passwords)
   passwords, vispw = [], []
   for i in range(args.askpass):
@@ -137,28 +190,10 @@ def main_enc(args):
   passwords += map(util.encode, args.passwords)
   # Use threaded password hashing for parallel and background operation
   with ThreadPoolExecutor(max_workers=4) as executor:
+    if args.idname:
+      idpwhasher = executor.submit(passphrase.pwhash, idpass)
+      del idpass
     pwhasher = executor.map(passphrase.pwhash, set(passwords))
-    # Convert recipient definitions into keys
-    recipients = []
-    for keystr in args.recipients:
-      try:
-        recipients.append(pubkey.decode_pk(keystr))
-      except ValueError as e:
-        if keystr.startswith("github:"):
-          raise ValueError(f"Unrecognized recipient string. Download a key from Github by -R {keystr}")
-        elif os.path.isfile(keystr):
-          raise ValueError(f"Unrecognized recipient string. Use a keyfile by -R {keystr}")
-        raise
-    for fn in args.recipfiles:
-      recipients += pubkey.read_pk_file(fn)
-    # Unique recipient keys sorted by keystr
-    l = len(recipients)
-    recipients = list(sorted(set(recipients), key=str))
-    if len(recipients) < l:
-      sys.stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
-    # Signatures
-    signatures = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk}
-    signatures = list(sorted(signatures, key=str))
     # Input files
     if not args.files or True in args.files:
       if sys.stdin.isatty():
@@ -170,18 +205,43 @@ def main_enc(args):
         stin = sys.stdin.buffer
       args.files = [stin] + [f for f in args.files if f != True]
     # Collect the password hashing results
-    if passwords and sys.stderr.isatty():
-      sys.stderr.write("Password hashing... ")
-      sys.stderr.flush()
-    pwhashes = set(pwhasher)
-    if passwords and sys.stderr.isatty():
-      sys.stderr.write("\r\x1B[0K")
-      sys.stderr.flush()
-    del passwords
+    pwhashes = set()
+    if args.idname or passwords:
+      with tty.status("Password hashing... "):
+        if args.idname: idpwhash = idpwhasher.result()
+        pwhashes = set(pwhasher)
+      del passwords
+    # ID store update
+    ratch = None
+    if args.idname:
+      # Try until the passphrase works
+      while True:
+        try:
+          idkey, peerkey, ratch = idstore.profile(
+            idpwhash,
+            args.idname,
+            idkey=signatures[0] if signatures else None,
+            peerkey=recipients[0] if recipients else None,
+          )
+          break
+        except ValueError as e:
+          # TODO: Add different exception types to avoid this check
+          if "Not authenticated" not in str(e): raise
+        idpwhash = passphrase.pwhash(passphrase.ask("Wrong password, try again. Master ID passphrase")[0])
+      signatures = [idkey]
+      recipients = [peerkey]
+  # Prepare for encryption
   a = Archive()
   a.file_index(args.files)
+  if ratch:
+    if ratch.RK:
+      # Enable ratchet mode auth
+      recipients = ratch
+    else:
+      # Advertise ratchet capability and send initial message number
+      a.index['r'] = ratch.s.N
   if signatures:
-    a.index['s'] = [s.edpk for s in signatures]
+    a.index['s'] = [s.pk for s in signatures]
   # Output files
   realoutf = open(args.outfile, "wb") if args.outfile else sys.stdout.buffer
   if args.armor or not args.outfile and sys.stdout.isatty():
@@ -209,16 +269,21 @@ def main_enc(args):
     for block in encrypt_file((args.wideopen, pwhashes, recipients, signatures), a.encode, a):
       progress.update(len(block))
       outf.write(block)
+  # Store ratchet
+  if ratch: idstore.update_ratchet(idpwhash, ratch, a)
   # Pretty output printout
   if sys.stderr.isatty():
     # Print a list of files
     lock = " 🔓 wide-open" if args.wideopen else " 🔒 covert"
-    methods = "  ".join(
-      [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (numpasswd - len(vispw)) * ["🔑 <pw>"]
-    )
-    methods += f' 🔷 {a.filehash[:12].hex()}'
-    for id in signatures:
-      methods += f"  🖋️ {id}"
+    if ratch and ratch.RK:
+      methods = f'🔗 #{ratch.s.CN + ratch.s.N}'
+    else:
+      methods = "  ".join(
+        [f"🔗 {r}" for r in recipients] + [f"🔑 {a}" for a in vispw] + (numpasswd - len(vispw)) * ["🔑 <pw>"]
+      )
+      methods += f' 🔷 {a.filehash[:12].hex()}'
+    for s in signatures:
+      methods += f"  🖋️ {s}"
     if methods:
       lock += f"    {methods}"
     if args.outfile:
@@ -290,24 +355,33 @@ def main_dec(args):
   else:
     with suppress(OSError):
       infile = mmap.mmap(infile.fileno(), 0, access=mmap.ACCESS_READ)
-  with ThreadPoolExecutor(max_workers=4) as executor:
-    pwhasher = lazyexec.map(executor, passphrase.pwhash, {util.encode(pwd) for pwd in args.passwords})
-    def authgen():
-      it = itertools.chain(identities, pwhasher, (passphrase.pwhash(passphrase.ask('Passphrase')[0]) for i in range(args.askpass)))
-      while True:
-        if sys.stderr.isatty():
-          sys.stderr.write("Password hashing... ")
-          sys.stderr.flush()
-        try:
-          pwhash = next(it)
-        except StopIteration:
-          break
-        finally:
-          if sys.stderr.isatty():
-            sys.stderr.write("\r\x1B[0K")
-            sys.stderr.flush()
-        yield pwhash
-    run_decryption(infile, args, authgen())
+  b = BlockStream()
+  with b.decrypt_init(infile):
+    idkeys = {}
+    # Authenticate
+    with ThreadPoolExecutor(max_workers=4) as executor:
+      pwhasher = lazyexec.map(executor, passphrase.pwhash, {util.encode(pwd) for pwd in args.passwords})
+      def authgen():
+        nonlocal idkeys
+        yield from identities
+        with tty.status("Password hashing... "):
+          yield from pwhasher
+          if idstore.idfilename.exists():
+            global idpwhash
+            idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
+            idkeys = idstore.idkeys(idpwhash)
+            yield from idstore.authgen(idpwhash)
+          for i in range(args.askpass):
+            yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
+      if not b.header.key:
+        auth = authgen()
+        for a in auth:
+          with suppress(CryptoError):
+            b.authenticate(a)
+            break
+        auth.close()
+    # Decrypt and verify
+    run_decryption(infile, args, b, idkeys)
 
 
 def main_edit(args):
@@ -358,6 +432,102 @@ def main_edit(args):
   else:
     with open(fname, "wb") as f:
       f.write(out)
+
+
+def main_id(args):
+  if len(args.files) > 1:
+    raise ValueError("Argument error, one ID at most should be specified")
+  if args.delete_entire_idstore:
+    if args.files:
+      raise ValueError("No ID should be provided with --delete-entire-idstore")
+    try:
+      idstore.delete_entire_idstore()
+      sys.stderr.write(f"{idstore.idfilename} shredded and deleted.\n")
+    except FileNotFoundError:
+      sys.stderr.write(f"{idstore.idfilename} does not exist.\n")
+    return
+  if args.files:
+    parts = args.files[0].split(":", 1)
+    local = parts[0]
+    peer = parts[1] if len(parts) == 2 else ""
+    tagself = f"id:{local}"
+    tagpeer = f"id:{local}:{peer}" if peer else None
+  else:
+    tagself = tagpeer = None
+  if args.delete and not tagself:
+    raise ValueError("Need an ID of form yourname or yourname:peername to delete.")
+  # Load keys from command line
+  selfkey = peerkey = None
+  if args.recipients or args.recipfiles:
+    if not tagpeer: raise ValueError("Need an ID of form yourname:peername to assign a public key")
+    if len(args.recipients) + len(args.recipfiles) > 1: raise ValueError("Only one public key may be specified for ID store")
+    peerkey = pubkey.decode_pk(args.recipients[0]) if args.recipients else pubkey.read_pk_file(args.recipfiles[0])[0]
+  if args.identities:
+    if not tagself: raise ValueError("Need an ID to assign a secret key.")
+    if len(args.identities) > 1: raise ValueError("Only one secret key may be specified for ID store")
+    selfkey = pubkey.read_sk_any(args.identities[0])[0]
+  # First run UX
+  create_idstore = not idstore.idfilename.exists()
+  if create_idstore:
+    if not tagself: raise ValueError("To create a new ID store, specify an ID to create e.g.\n  covert id alice\n")
+    if tagpeer and not peerkey: raise ValueError(f"No public key provided for new peer {tagpeer}.")
+    sys.stderr.write(f" 🗄️  Creating {idstore.idfilename}\n")
+  # Passphrases
+  idpass = newpass = None
+  if not create_idstore:
+    idpass = passphrase.ask("Master ID passphrase")[0]
+  with ThreadPoolExecutor(max_workers=2) as executor:
+    pwhasher = executor.submit(passphrase.pwhash, idpass) if idpass is not None else None
+    newhasher = None
+    if args.askpass or create_idstore:
+      newpass, visible = passphrase.ask("New Master ID passphrase", create=5)
+      newhasher = executor.submit(passphrase.pwhash, newpass)
+      if visible:
+        sys.stderr.write(f" 📝 Master ID passphrase: \x1B[32;1m{newpass.decode()}\x1B[0m\n")
+    with tty.status("Password hashing... "):
+      idhash = pwhasher.result() if pwhasher else None
+      newhash = newhasher.result() if newhasher else None
+    del idpass, newpass, pwhasher, newhasher
+  # Update ID store
+  for ids in idstore.update(idhash, new_pwhash=newhash):
+    if args.delete:
+      if tagpeer:
+        del ids[tagpeer]
+      else:
+        # Delete ID and all peers connected to it
+        del ids[tagself]
+        for k in list(ids):
+          if k.startswith(f"{tagself}:"): del ids[k]
+      return
+    # Update/add secret key?
+    if tagself and tagself not in ids:
+      ids[tagself] = dict()
+      if not selfkey:
+        sys.stderr.write(f" 🧑 {tagself} keypair created\n")
+        selfkey = pubkey.Key()
+    if selfkey:
+      ids[tagself]["I"] = selfkey.sk
+    # Update/add peer public key?
+    if tagpeer and tagpeer not in ids:
+      if not peerkey: raise ValueError(f"No public key provided for new peer {tagpeer}.")
+      if tagpeer not in ids: ids[tagpeer] = dict()
+      ids[tagpeer]["i"] = peerkey.pk
+    # Print keys
+    for key, value in ids.items():
+      if tagself and key not in (tagself, tagpeer): continue
+      if "I" in value:
+        k = pubkey.Key(sk=value["I"])
+        sk = pubkey.encode_age_sk(k)
+        pk = pubkey.encode_age_pk(k)
+        print(f"{key:15} {pk}")
+        if args.secret: print(f" ╰─ {sk}")
+      elif "i" in value:
+        pk = pubkey.encode_age_pk(pubkey.Key(pk=value["i"]))
+        print(f"{key:15} {pk}")
+      # Ratchet info
+      if (r := value.get("r")):
+        state = "with forward secrecy" if r["RK"] else "initialising (messages sent but no response yet)"
+        print(f"   conversation {state}")
 
 
 def main_benchmark(args):

@@ -4,7 +4,7 @@ from io import BytesIO, TextIOWrapper
 
 import pytest
 
-from covert import passphrase, cli
+from covert import cli, passphrase, path
 from covert.__main__ import argparse, main
 
 
@@ -115,13 +115,13 @@ def test_end_to_end_multiple(covert, tmp_path, mocker):
   )
   assert not cap.out
   assert "foo.txt" in cap.err
-  assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
+  assert "Signed by Key[827bc3b2:PK]" in cap.err
 
   # Decrypt with passphrase
   cap = covert('dec', '--password', 'verytestysecret', fname)
   assert not cap.out
   assert "foo.txt" in cap.err
-  assert "Key[827bc3b2:EdPK] Signature verified" in cap.err
+  assert "Signed by Key[827bc3b2:PK]" in cap.err
 
 
 def test_end_to_end_github(covert, tmp_path, mocker):
@@ -250,18 +250,140 @@ def test_end_to_end_edit_armored_stdio(covert, mocker, monkeypatch):
   assert "edited message" in cap.out
 
 
+def test_idstore(covert, mocker, tmp_path):
+  outfname = tmp_path / "crypto.covert"
+  mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Enable full status messages
+  mocker.patch("sys.stderr.isatty", return_value=True)
+
+  # Test environment should set XDG_DATA_DIR outside of standard location
+  assert "/tmp/" in str(path.idfilename)
+
+  # Create ID store
+  cap = covert("id", "alice")
+  assert "Creating" in cap.err
+  assert "Master ID passphrase:" in cap.err
+  assert "verytestysecret" in cap.err
+  assert "id:alice" in cap.out
+  assert "age1" in cap.out
+
+  # Encrypt
+  cap = covert("enc", "-I", "alice:testkey", "-R", "tests/keys/ssh_ed25519.pub", "-o", outfname)
+  assert "🔗 id:alice:testkey" in cap.err
+  assert "🖋️ id:alice" in cap.err
+
+  # Add secret key
+  cap = covert("id", "bob", "-i", "tests/keys/ssh_ed25519")
+  assert "id:bob" in cap.out
+
+  # Decrypt using idstore
+  cap = covert("dec", outfname)
+  assert "Unlocked with id:bob" in cap.err
+  assert "Signed by id:alice" in cap.err
+
+  # Encrypt with local id as peer
+  cap = covert("enc", "-I", "alice:bob", "-o", outfname)
+  assert "🔗 id:alice:bob" in cap.err
+  assert "🖋️ id:alice" in cap.err
+
+  # Decrypt using idstore
+  cap = covert("dec", outfname)
+  assert "Unlocked with id:bob" in cap.err
+  assert "Signed by id:alice" in cap.err
+
+  # List keys
+  cap = covert("id", "--secret")
+  assert "id:alice" in cap.out
+  assert "id:alice:testkey" in cap.out
+  assert "AGE-SECRET-KEY" in cap.out
+  assert "id:alice:bob" in cap.out
+
+  # Delete peer
+  cap = covert("id", "--delete", "alice:bob")
+  assert f"alice:bob" not in cap.out
+
+  # Delete local
+  cap = covert("id", "--delete", "alice")
+  assert f"alice" not in cap.out
+
+  # Shred
+  cap = covert("id", "--delete-entire-idstore")
+  assert f"{path.idfilename} shredded and deleted" in cap.err
+
+
+def test_ratchet(covert, mocker, tmp_path):
+  outfname = tmp_path / "crypto.covert"
+  mocker.patch("covert.passphrase.ask", return_value=(b"verytestysecret", True))
+
+  # Enable full status messages
+  mocker.patch("sys.stderr.isatty", return_value=True)
+
+  # Test environment should set XDG_DATA_DIR outside of standard location
+  assert "/tmp/" in str(path.idfilename)
+
+  # Create IDs
+  cap = covert("id", "alice")
+  assert "age1" in cap.out
+
+  cap = covert("id", "bob", "-i", "tests/keys/ageid-age1cghwz85tpv2eutkx8vflzjfa9f96wad6d8an45wcs3phzac2qdxq9dqg5p")
+  assert "age1cghwz85tpv2eutkx8vflzjfa9f96wad6d8an45wcs3phzac2qdxq9dqg5p" in cap.out
+
+  # Alice encrypts initial message
+  cap = covert("enc", "-I", "alice:bob", "-o", outfname)
+  assert "🔗 id:alice:bob" in cap.err
+  assert "🖋️ id:alice" in cap.err
+
+  # Bob decrypts
+  cap = covert("dec", "-I", "bob:alice", outfname)
+  assert "Unlocked with id:bob" in cap.err
+  assert "Signed by id:alice" in cap.err
+
+  # Bob replies
+  cap = covert("enc", "-I", "bob:alice", "-o", outfname)
+  assert "🔗 #1" in cap.err
+
+  # Alice decrypts
+  cap = covert("dec", outfname)
+  assert "Conversation id:alice:bob" in cap.err
+
+  # Bob sends another (no round-trip, message lost)
+  cap = covert("enc", "-I", "bob:alice", "-o", outfname)
+  assert "🔗 #2" in cap.err
+
+  # Bob sends another (no round-trip)
+  cap = covert("enc", "-I", "bob:alice", "-o", outfname)
+  assert "🔗 #3" in cap.err
+
+  # Alice decrypts
+  cap = covert("dec", outfname)
+  assert "Conversation id:alice:bob" in cap.err
+
+  # Alice replies (first normal ratchet message from her)
+  cap = covert("enc", "-I", "alice:bob", "-o", outfname)
+  assert "🔗 #2" in cap.err
+
+  # Bob decrypts
+  cap = covert("dec", outfname)
+  assert "Conversation id:bob:alice" in cap.err
+
+  # Shred
+  cap = covert("id", "--delete-entire-idstore")
+  assert f"{path.idfilename} shredded and deleted" in cap.err
+
+
 def test_errors(covert):
   cap = covert()
-  assert "Usage:" in cap.out
+  assert "Covert" in cap.out
   assert not cap.err
 
   cap = covert('-eINvalid', '--help')
-  assert "Usage:" in cap.out
+  assert "Covert" in cap.out
   assert not cap.err
 
   cap = covert('-eINvalid', exitcode=1)
   assert not cap.out
-  assert "not an argument: covert enc -INvalid" in cap.err
+  assert "Unknown argument: covert enc -INvalid (failing -N -v -l -d)" in cap.err
 
   cap = covert("-o", exitcode=1)
   assert not cap.out
@@ -282,6 +404,51 @@ def test_errors(covert):
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
 
+  cap = covert("enc", "--id", "alice:bob", exitcode=10)
+  assert not cap.out
+  assert "Peer not in ID store. You need to specify a recipient public key on the first use." in cap.err
+
+  cap = covert("id", "alice", "bob", exitcode=10)
+  assert not cap.out
+  assert "one ID at most should be specified" in cap.err
+
+  cap = covert("id", "alice", "--delete-entire-idstore", exitcode=10)
+  assert not cap.out
+  assert "No ID should be provided with --delete-entire-idstore" in cap.err
+
+  assert not path.idfilename.exists()
+  cap = covert("id", "--delete-entire-idstore")  # Note: exitcode 0
+  assert not cap.out
+  assert "does not exist" in cap.err
+
+  cap = covert("id", "--delete", exitcode=10)
+  assert not cap.out
+  assert "Need an ID of form yourname or yourname:peername to delete." in cap.err
+
+  cap = covert("id", "-i", "tests/keys/ssh_ed25519.pub", exitcode=10)
+  assert not cap.out
+  assert "Need an ID to assign a secret key." in cap.err
+
+  cap = covert("id", "alice", "-R", "tests/keys/ssh_ed25519.pub", exitcode=10)
+  assert not cap.out
+  assert "Need an ID of form yourname:peername to assign a public key" in cap.err
+
+  cap = covert("id", "alice:bob", "-R", "tests/keys/ssh_ed25519.pub", "-r", "age1fakekey", exitcode=10)
+  assert not cap.out
+  assert "Only one public key may be specified" in cap.err
+
+  cap = covert("id", "alice", "-i", "tests/keys/ssh_ed25519", "-i", "tests/keys/minisign.key", exitcode=10)
+  assert not cap.out
+  assert "Only one secret key may be specified for ID store" in cap.err
+
+  cap = covert("id", exitcode=10)
+  assert not cap.out
+  assert "To create a new ID store, specify an ID to create" in cap.err
+
+  cap = covert("id", "alice:bob", exitcode=10)
+  assert not cap.out
+  assert "No public key provided for new peer id:alice:bob." in cap.err
+
 
 def test_miscellaneous(covert, tmp_path, capsys, mocker):
   """Testing remaining spots to gain full coverage."""
@@ -298,7 +465,8 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
   assert "10,485,761 📄 test.dat" in cap.err
 
   cap = covert("-v")
-  assert "A file and message encryptor with strong anonymity" in cap.out
+  assert "A file and message encryptor" not in cap.out
+  assert "Covert " in cap.out
   assert not cap.err
 
   cap = covert("-e", 1, "-z", exitcode=1)
