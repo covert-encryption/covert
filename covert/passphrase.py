@@ -7,7 +7,7 @@ from zxcvbn import zxcvbn
 from zxcvbn.time_estimates import display_time
 
 from covert import util
-from covert.tty import fullscreen
+from covert.cli.tty import fullscreen
 from covert.wordlist import words
 
 MINLEN = 8  # Bytes, not characters

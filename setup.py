@@ -36,7 +36,7 @@ setup(
   },
   include_package_data=True,
   entry_points=dict(
-    console_scripts=["covert = covert.__main__:main"],
+    console_scripts=["covert = covert.cli.__main__:main"],
     gui_scripts=["qcovert = covert.gui.__main__:main [gui]"],
   ),
 )
