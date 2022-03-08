@@ -4,8 +4,11 @@ from io import BytesIO, TextIOWrapper
 
 import pytest
 
-from covert import cli, passphrase, path
-from covert.__main__ import argparse, main
+from covert import passphrase, path
+from covert.cli.__main__ import main
+from covert.cli.args import argparse
+from covert.cli.dec import main_dec
+from covert.cli.edit import main_edit
 
 
 def test_argparser(capsys):
@@ -211,11 +214,11 @@ def test_end_to_end_edit(covert, tmp_path, mocker):
   assert not cap.out
   assert "foo" in cap.err
 
-  editor = mocker.patch("covert.tty.editor", return_value="added message")
+  editor = mocker.patch("covert.cli.tty.editor", return_value="added message")
   cap = covert("edit", fname)
   editor.assert_called_once_with()
 
-  editor = mocker.patch("covert.tty.editor", return_value="edited message")
+  editor = mocker.patch("covert.cli.tty.editor", return_value="edited message")
   cap = covert("edit", fname)
   editor.assert_called_once_with("added message")
 
@@ -239,7 +242,7 @@ def test_end_to_end_edit_armored_stdio(covert, mocker, monkeypatch):
   assert cap.out and cap.out.isascii()
 
   # Edit the message stdio
-  editor = mocker.patch("covert.tty.editor", return_value="edited message")
+  editor = mocker.patch("covert.cli.tty.editor", return_value="edited message")
   cap = covert("edit", "-", stdin=cap.out)
   assert cap.out and cap.out.isascii()
   assert not cap.err
@@ -506,11 +509,11 @@ def test_files_count():
   sys.argv = "covert dec testfile1.txt testfile2.txt".split()
   args = argparse()
   with pytest.raises(ValueError) as exc:
-    cli.main_dec(args)
+    main_dec(args)
   assert "Only one input file is allowed when decrypting" in str(exc.value)
 
   sys.argv = "covert edit".split()
   args = argparse()
   with pytest.raises(ValueError) as exc:
-    cli.main_edit(args)
+    main_edit(args)
   assert "Edit mode requires an encrypted archive filename" in str(exc.value)

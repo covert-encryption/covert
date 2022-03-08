@@ -19,7 +19,7 @@ usage = dict(
   dec=f"{C}covert {F}dec {D}[{F}--id {N}you:them{D}] [{F}-i {N}id.key{D}] [{F}-A {D}|{N} cipher.dat{D}] [{F}-o {N}files/{D}]{N}\n",
   id=f"{C}covert {F}id {D}[{N}you:them{D}] [{N}options{D}] —{N} create/manage ID store of your keys\n",
   edit=f"{C}covert {F}edit {N}cipher.dat {D}—{N} securely keep notes with passphrase protection\n",
-  bench=f"{C}covert {F}benchmark {D}—{N} run a performance benchmark for decryption and encryption\n",
+  bench=f"{C}covert {F}bench {D}—{N} run a performance benchmark for decryption and encryption\n",
 )
 
 usagetext = dict(
