@@ -56,6 +56,12 @@ class Header:
   def try_key(self, recvkey: Key):
     self._find_slots(pubkey.derive_symkey(self.nonce, recvkey, self.eph))
 
+  def try_ratchet(self, r: ratchet.Ratchet):
+    authkey = r.receive(self.ciphertext)
+    self._find_block0(authkey, 50)
+    self.slot = "conversation"
+    self.ratchet = r
+
   def try_pass(self, pwhash: bytes):
     authkey = passphrase.authkey(pwhash, self.nonce)
     try:

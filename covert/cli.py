@@ -18,6 +18,9 @@ from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
 
 from typing import Generator
 
+idpwhash = None
+
+
 def run_decryption(infile, args, auth):
   a = Archive()
   progress = None
