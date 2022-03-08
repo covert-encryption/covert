@@ -51,7 +51,7 @@ class Header:
     self.eph = pubkey.Key(pkhash=self.ciphertext[:32])
     self.slot = "locked"
     self.key = None
-    self.authkey: Optional[bytes] = None
+    self.authkey: Optional[Key] = None
     self.ratchet: Optional[ratchet.Ratchet] = None
     self.block0pos = None
     self.block0len = None
