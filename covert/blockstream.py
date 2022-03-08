@@ -13,9 +13,13 @@ from covert.cryptoheader import Header, encrypt_header
 from covert.elliptic import xed_sign, xed_verify
 from covert.util import noncegen
 
+from typing import Generator, Optional, Union
+from io import BytesIO, FileIO
+from covert.archive import Archive
+
 BS = (1 << 20) - 19  # The maximum block size to use
 
-def decrypt_file(auth, f, archive):
+def decrypt_file(auth: Generator, f: BytesIO, archive: Archive):
   b = BlockStream()
   with b.decrypt_init(f):
     if not b.header.key:
@@ -42,7 +46,7 @@ class BlockStream:
     self.end = 0
 
 
-  def authenticate(self, anykey):
+  def authenticate(self, anykey: Union[bytes, pubkey.Key]):
     """Attempt decryption using secret key or password hash"""
     if isinstance(anykey, ratchet.Ratchet):
       self.header.try_ratchet(anykey)
@@ -75,7 +79,7 @@ class BlockStream:
       self.pos = self.end = 0
 
 
-  def _add_to_queue(self, p, extlen, aad=None):
+  def _add_to_queue(self, p: int, extlen: int, aad: Optional[bytes] =None) -> int:
     pos, end = p, p + extlen
     #assert isinstance(nblk, bytes) and len(nblk) == 12
     #assert isinstance(self.key, bytes) and len(self.key) == 32
@@ -84,7 +88,7 @@ class BlockStream:
     self.q.append((fut, nblk, pos, extlen))
     return end
 
-  def _read(self, extlen):
+  def _read(self, extlen: int) -> int:
     """Try to get at least extlen bytes after current pos cursor. Returns the number of bytes available."""
     if self.file:
       # Restart from the beginning of the buffer if the end would be reached
@@ -151,7 +155,7 @@ class BlockStream:
       qq[0].cancel()
 
 
-  def verify_signatures(self, a):
+  def verify_signatures(self, a: Archive):
     a.filehash = self.blkhash
     a.signatures = []
     # Signature verification
@@ -179,7 +183,7 @@ class BlockStream:
 
 class Block:
 
-  def __init__(self, maxlen=BS, aad=None):
+  def __init__(self, maxlen: int =BS, aad: Optional[bytes] =None):
     self.cipher = memoryview(bytearray(maxlen + 19))
     self.data = self.cipher[:-19]
     self.len = None
@@ -188,7 +192,7 @@ class Block:
     self.nextlen = None
 
   @property
-  def spaceleft(self):
+  def spaceleft(self) -> int:
     maxlen = self.len or len(self.data)
     return maxlen - self.pos
 
@@ -202,7 +206,7 @@ class Block:
       self.pos += ls
     return data[ls:]
 
-  def finalize(self, nextlen, n, key):
+  def finalize(self, nextlen: int, n: bytes, key: bytes):
     if self.len and self.pos < self.len:
       raise Exception(f"Block with {self.len=} finalized with only {self.pos=}.")
     self.cipher = self.cipher[:self.pos + 19]
