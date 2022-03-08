@@ -1,5 +1,6 @@
 import mmap
 import os
+import time
 from contextlib import suppress
 from copy import copy
 from pathlib import Path
@@ -51,6 +52,8 @@ def update(pwhash, allow_create=True, new_pwhash=None):
     # Yield the ID store for operations but do an update even on break/return etc
     with suppress(GeneratorExit):
       yield a.index["I"]
+    # Remove expired records
+    remove_expired(a.index["I"])
     # Reset archive for re-use in encryption
     a.reset()
     a.fds = [BytesIO(f.data) for f in a.flist]
@@ -158,3 +161,22 @@ def idkeys(pwhash):
         k = pubkey.Key(comment=key, pk=value["i"])
         if k not in keys: keys[k] = k
   return keys
+
+
+def remove_expired(ids: dict) -> None:
+  """Delete all records that have expired."""
+  t = time.time()
+  for k in list(ids):
+    v = ids[k]
+    # The entire peer
+    if "e" in v and v["e"] < t:
+      del ids[k]
+      continue
+    if "r" in v:
+      r = v["r"]
+      # The entire ratchet
+      if r["e"] < t:
+        del v["r"]
+        continue
+      # Message keys
+      r["msg"] = [m for m in r['msg'] if m["e"] > t]

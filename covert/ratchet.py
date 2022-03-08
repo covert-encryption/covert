@@ -1,6 +1,6 @@
 import itertools
 from contextlib import suppress
-from time import time
+import time
 
 import nacl.bindings as sodium
 from nacl.exceptions import CryptoError
@@ -11,10 +11,10 @@ from covert.pubkey import Key, derive_symkey
 MAXSKIP = 20
 
 def expire_soon():
-  return int(time()) + 600  # 10 minutes
+  return int(time.time()) + 600  # 10 minutes
 
 def expire_later():
-  return int(time()) + 86400 * 28  # four weeks
+  return int(time.time()) + 86400 * 28  # four weeks
 
 def chainstep(chainkey: bytes, addn=b""):
   """Perform a chaining step, returns (new chainkey, message key)."""

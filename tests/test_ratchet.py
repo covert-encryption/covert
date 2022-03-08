@@ -1,8 +1,10 @@
+from copy import deepcopy
 from secrets import token_bytes
 
 import pytest
 from nacl.exceptions import CryptoError
 
+from covert.idstore import remove_expired
 from covert.pubkey import Key
 from covert.ratchet import Ratchet
 
@@ -95,3 +97,43 @@ def test_ratchet_lost_messages():
   # Fail to decode own message
   with pytest.raises(CryptoError):
     b.receive(header1)
+
+
+def test_expiration(mocker):
+  soon = 600
+  later = 86400 * 28
+  mocker.patch("time.time", return_value=1e9)
+  r = Ratchet()
+  assert r.e == 1_000_000_000 + later
+
+  r.init_bob(bytes(32), Key(), Key())
+  r.readmsg()
+  assert r.msg[0]["e"] == 1_000_000_000 + soon
+
+  ids = {
+    "id:alice": {"I": bytes(32)},
+    "id:alice:bob": {
+      "i": bytes(32),
+      "e": 2_000_000_000,
+      "r": r.store(),
+    },
+  }
+
+  ids2 = deepcopy(ids)
+  remove_expired(ids2)
+  assert ids == ids2
+
+  mocker.patch("time.time", return_value=1e9 + soon + 1)
+  ids2 = deepcopy(ids)
+  remove_expired(ids2)
+  assert not ids2["id:alice:bob"]["r"]["msg"]
+
+  mocker.patch("time.time", return_value=1e9 + later + 1)
+  ids2 = deepcopy(ids)
+  remove_expired(ids2)
+  assert not "r" in ids2["id:alice:bob"]
+
+  mocker.patch("time.time", return_value=2e9 + 1)
+  ids2 = deepcopy(ids)
+  remove_expired(ids2)
+  assert not "id:alice:bob" in ids2
