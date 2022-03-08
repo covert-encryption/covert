@@ -168,12 +168,15 @@ def remove_expired(ids: dict) -> None:
   t = time.time()
   for k in list(ids):
     v = ids[k]
+    # The entire peer
     if "e" in v and v["e"] < t:
       del ids[k]
       continue
     if "r" in v:
       r = v["r"]
+      # The entire ratchet
       if r["e"] < t:
         del v["r"]
         continue
+      # Message keys
       r["msg"] = [m for m in r['msg'] if m["e"] > t]
