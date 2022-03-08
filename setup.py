@@ -27,6 +27,7 @@ setup(
     "msgpack>=1.0",
     "pyperclip>=1.8",
     "zxcvbn-covert>=5.0.1",
+    "xdg>=5.1.1",
   ],
   extras_require={
     "gui": ["pyside6>=6.2.1", "show-in-file-manager>=1.1.3"],

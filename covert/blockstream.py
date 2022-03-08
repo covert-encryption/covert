@@ -2,13 +2,13 @@ import collections
 import mmap
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from hashlib import sha512
 from secrets import token_bytes
 
 from nacl.exceptions import CryptoError
 
-from covert import chacha, pubkey
+from covert import chacha, pubkey, ratchet
 from covert.cryptoheader import Header, encrypt_header
 from covert.elliptic import xed_sign, xed_verify
 from covert.util import noncegen
@@ -21,14 +21,16 @@ BS = (1 << 20) - 19  # The maximum block size to use
 
 def decrypt_file(auth: Generator, f: BytesIO, archive: Archive):
   b = BlockStream()
-  b.decrypt_init(f)
-  if not b.header.key:
-    for a in auth:
-      with suppress(CryptoError):
-        b.authenticate(a)
-        break
-  yield from b.decrypt_blocks()
-  b.verify_signatures(archive)
+  with b.decrypt_init(f):
+    if not b.header.key:
+      for a in auth:
+        with suppress(CryptoError):
+          b.authenticate(a)
+          break
+      # In case auth is a generator, close it immediately (otherwise would be delayed)
+      if hasattr(auth, "close"): auth.close()
+    yield from b.decrypt_blocks()
+    b.verify_signatures(archive)
 
 class BlockStream:
   def __init__(self):
@@ -37,17 +39,23 @@ class BlockStream:
     self.workers = 8
     self.executor = ThreadPoolExecutor(max_workers=self.workers)
     self.blkhash = None
+    self.file = None
     self.ciphertext = None
     self.q = collections.deque()
     self.pos = 0  # Current position within self.ciphertext; queued for decryption, not decoded
+    self.end = 0
+
 
   def authenticate(self, anykey: Union[bytes, pubkey.Key]):
     """Attempt decryption using secret key or password hash"""
-    if isinstance(anykey, pubkey.Key):
+    if isinstance(anykey, ratchet.Ratchet):
+      self.header.try_ratchet(anykey)
+    elif isinstance(anykey, pubkey.Key):
       self.header.try_key(anykey)
     else:
       self.header.try_pass(anykey)
 
+  @contextmanager
   def decrypt_init(self, f):
     self.pos = 0
     if hasattr(f, "__len__"):
@@ -62,6 +70,14 @@ class BlockStream:
       self.end = 0
     size = self._read(1024)
     self.header = Header(self.ciphertext[:size])
+    try:
+      yield
+    finally:
+      self.ciphertext.release()
+      self.ciphertext = None
+      self.file = None
+      self.pos = self.end = 0
+
 
   def _add_to_queue(self, p: int, extlen: int, aad: Optional[bytes] =None) -> int:
     pos, end = p, p + extlen
@@ -144,7 +160,7 @@ class BlockStream:
     a.signatures = []
     # Signature verification
     if a.index.get('s'):
-      signatures = [pubkey.Key(edpk=k) for k in a.index['s']]
+      signatures = [pubkey.Key(pk=k) for k in a.index['s']]
       for key in signatures:
         sz = self._read(self.end - self.pos + 80)
         if sz < 80:
@@ -160,7 +176,7 @@ class BlockStream:
           continue
         try:
           xed_verify(key.pk, self.blkhash, signature)
-          a.signatures.append((True, key, 'Signature verified'))
+          a.signatures.append((True, key, 'Signed by'))
         except CryptoError:
           a.signatures.append((False, key, 'Forged signature'))
 

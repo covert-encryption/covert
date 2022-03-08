@@ -3,7 +3,7 @@ from contextlib import suppress
 
 from nacl.exceptions import CryptoError
 
-from covert import chacha, passphrase, pubkey, util
+from covert import chacha, passphrase, pubkey, ratchet, util
 
 from typing import Generator, Tuple, Union, Optional
 from covert.typing import BytesLike
@@ -13,6 +13,11 @@ def encrypt_header(auth) -> Tuple[bytes, Generator, bytes]:
   wideopen, pwhashes, recipients, identities = auth
   assert wideopen or pwhashes or recipients, "Must have an authentication method defined"
   assert not wideopen or not (pwhashes or recipients), "Cannot have auth with wide-open"
+  # Ratchet mode special handling
+  if isinstance(recipients, ratchet.Ratchet):
+    header, key = recipients.send()  # Ratchet.send
+    print(len(header), key.hex())
+    return header, util.noncegen(header[:12]), key
   # Ensure uniqueness
   pwhashes = set(pwhashes)
   recipients = set(recipients)
@@ -46,6 +51,8 @@ class Header:
     self.eph = pubkey.Key(pkhash=self.ciphertext[:32])
     self.slot = "locked"
     self.key = None
+    self.authkey = None
+    self.ratchet = None
     self.block0pos = None
     self.block0len = None
     with suppress(CryptoError):
@@ -55,6 +62,7 @@ class Header:
 
   def try_key(self, recvkey: Key):
     self._find_slots(pubkey.derive_symkey(self.nonce, recvkey, self.eph))
+    self.authkey = recvkey
 
   def try_ratchet(self, r: ratchet.Ratchet):
     authkey = r.receive(self.ciphertext)
