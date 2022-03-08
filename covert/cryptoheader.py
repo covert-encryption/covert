@@ -6,6 +6,7 @@ from nacl.exceptions import CryptoError
 from covert import chacha, passphrase, pubkey, util
 
 from typing import Generator, Tuple, Union, Optional
+from covert.typing import BytesLike
 from covert.pubkey import Key
 
 def encrypt_header(auth) -> Tuple[bytes, Generator, bytes]:
@@ -37,7 +38,7 @@ def encrypt_header(auth) -> Tuple[bytes, Generator, bytes]:
 
 
 class Header:
-  def __init__(self, ciphertext: memoryview):
+  def __init__(self, ciphertext: BytesLike):
     if len(ciphertext) < 32:  # 12 nonce + 1 data + 3 nextlen + 16 tag
       raise ValueError("This file is too small to contain encrypted data.")
     self.ciphertext = bytes(ciphertext[:1024])

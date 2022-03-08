@@ -13,7 +13,7 @@ from covert.cryptoheader import Header, encrypt_header
 from covert.elliptic import xed_sign, xed_verify
 from covert.util import noncegen
 
-from typing import Union, Generator
+from typing import Generator, Optional, Union
 from io import BytesIO, FileIO
 from covert.archive import Archive
 
@@ -41,7 +41,7 @@ class BlockStream:
     self.q = collections.deque()
     self.pos = 0  # Current position within self.ciphertext; queued for decryption, not decoded
 
-  def authenticate(self, anykey: bytes):
+  def authenticate(self, anykey: Union[bytes, pubkey.Key]):
     """Attempt decryption using secret key or password hash"""
     if isinstance(anykey, pubkey.Key):
       self.header.try_key(anykey)
@@ -63,7 +63,7 @@ class BlockStream:
     size = self._read(1024)
     self.header = Header(self.ciphertext[:size])
 
-  def _add_to_queue(self, p: int, extlen: int, aad: Union[bytes, None] =None) -> int:
+  def _add_to_queue(self, p: int, extlen: int, aad: Optional[bytes] =None) -> int:
     pos, end = p, p + extlen
     #assert isinstance(nblk, bytes) and len(nblk) == 12
     #assert isinstance(self.key, bytes) and len(self.key) == 32
@@ -167,7 +167,7 @@ class BlockStream:
 
 class Block:
 
-  def __init__(self, maxlen: int =BS, aad: Union[bytes, None] =None):
+  def __init__(self, maxlen: int =BS, aad: Optional[bytes] =None):
     self.cipher = memoryview(bytearray(maxlen + 19))
     self.data = self.cipher[:-19]
     self.len = None

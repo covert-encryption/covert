@@ -1,27 +1,28 @@
 from nacl._sodium import ffi, lib
 from nacl.exceptions import CryptoError
 
-from typing import Union
+from typing import Optional
+from covert.typing import BytesLike
 
 # The bindings provided in pynacl would only accept bytes (not memoryview etc),
 # and did not provide support for allocating the return buffer in Python.
 
 
-def decrypt(ciphertext: bytes, aad: Union[bytes, None], nonce: bytes, key: bytes) -> bytearray:
+def decrypt(ciphertext: bytes, aad: Optional[bytes], nonce: bytes, key: bytes) -> bytearray:
   message = bytearray(len(ciphertext) - 16)
   if decrypt_into(message, ciphertext, aad, nonce, key):
     raise CryptoError('Decryption failed')
   return message
 
 
-def encrypt(message: memoryview, aad: Union[bytes, None], nonce: bytes, key: bytes) -> bytes:
+def encrypt(message: BytesLike, aad: Optional[bytes], nonce: bytes, key: bytes) -> bytes:
   ciphertext = bytearray(len(message) + 16)
   if encrypt_into(ciphertext, message, aad, nonce, key):
     raise CryptoError('Encryption failed')
   return ciphertext
 
 
-def encrypt_into(ciphertext: bytes, message: memoryview, aad: Union[bytes, None], nonce: bytes, key: bytes) -> int:
+def encrypt_into(ciphertext: bytes, message: BytesLike, aad: Optional[bytes], nonce: bytes, key: bytes) -> int:
   mlen = len(message)
   clen = ffi.new("unsigned long long *")
   ciphertext = ffi.from_buffer(ciphertext)
@@ -38,7 +39,7 @@ def encrypt_into(ciphertext: bytes, message: memoryview, aad: Union[bytes, None]
   )
 
 
-def decrypt_into(message: bytearray, ciphertext: bytes, aad: Union[bytes, None], nonce: bytes, key: bytes) -> int:
+def decrypt_into(message: bytearray, ciphertext: bytes, aad: Optional[bytes], nonce: bytes, key: bytes) -> int:
   clen = len(ciphertext)
   mlen = ffi.new("unsigned long long *")
   message = ffi.from_buffer(message)
