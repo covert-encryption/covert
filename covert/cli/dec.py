@@ -180,7 +180,7 @@ def main_dec(args):
         e = None
         with tty.status("Password hashing... "):
           yield from pwhasher
-          if idstore.idfilename.exists() and not args.askpass:
+          if not args.askpass and idstore.idfilename.exists():
             global idpwhash
             try:
               idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
