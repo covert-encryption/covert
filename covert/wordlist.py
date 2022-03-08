@@ -22,7 +22,7 @@ gown grant great grid group grunt guard guess guide gulf gun gym habit hair half
 hay hazard head hedge height help hen hero hidden high hill hint hip hire hobby hockey hold home honey hood hope horse
 host hotel hour hover how hub huge human hungry hurt hybrid ice icon idea idle ignore ill image immune impact income
 index infant inhale inject inmate inner input inside into invest iron island issue italy item ivory jacket jaguar james
-jar jazz jeans jelly jewel job joint joke joy judge juice july jump june just kansas kate keep kernel key kick kid kind
+jar jazz jeans jelly jewel job join joke joy judge juice july jump june just kansas kate keep kernel key kick kid kind
 kiss kit kiwi knee knife know labor lady lag lake lamp laptop large later laugh lava law layer lazy leader left legal
 lemon length lesson letter level liar libya lid life light like limit line lion liquid list little live lizard load
 local logic long loop lost loud love low loyal lucky lumber lunch lust luxury lyrics mad magic main major make male
