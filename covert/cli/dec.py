@@ -182,6 +182,7 @@ def main_dec(args):
           yield from pwhasher
           if not args.askpass and idstore.idfilename.exists():
             global idpwhash
+            idpwhash = None  # In case main_dec is run multiple times (happens in tests)
             try:
               idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
               idkeys = idstore.idkeys(idpwhash)
@@ -189,10 +190,8 @@ def main_dec(args):
             except ValueError as e:
               # Treating as error only when suitable passphrase was given
               if idpwhash: raise ValueError(f"ID store: {e}")
-          # Ask for passphrase by default if no other methods were attempted
-          if not (args.askpass or args.passwords or args.identities):
-            args.askpass = 1
-          for i in range(args.askpass):
+          # Ask for passphrase if asked for or if no other methods were attempted
+          if args.askpass or not (args.passwords or args.identities):
             yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
       if not b.header.key:
         auth = authgen()
