@@ -138,9 +138,6 @@ def run_decryption(infile, args, b, idkeys):
 def main_dec(args):
   if len(args.files) > 1:
     raise ValueError("Only one input file is allowed when decrypting.")
-  # Ask for passphrase by default if no auth is specified
-  if not (args.askpass or args.passwords or args.identities):
-    args.askpass = 1
   identities = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr)}
   identities = list(sorted(identities, key=str))
   infile = open(args.files[0], "rb") if args.files else sys.stdin.buffer
@@ -180,14 +177,21 @@ def main_dec(args):
       def authgen():
         nonlocal idkeys
         yield from identities
+        e = None
         with tty.status("Password hashing... "):
           yield from pwhasher
-          if idstore.idfilename.exists():
+          if not args.askpass and idstore.idfilename.exists():
             global idpwhash
-            idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
-            idkeys = idstore.idkeys(idpwhash)
-            yield from idstore.authgen(idpwhash)
-          for i in range(args.askpass):
+            idpwhash = None  # In case main_dec is run multiple times (happens in tests)
+            try:
+              idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
+              idkeys = idstore.idkeys(idpwhash)
+              yield from idstore.authgen(idpwhash)
+            except ValueError as e:
+              # Treating as error only when suitable passphrase was given
+              if idpwhash: raise ValueError(f"ID store: {e}")
+          # Ask for passphrase if asked for or if no other methods were attempted
+          if args.askpass or not (args.passwords or args.identities):
             yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
       if not b.header.key:
         auth = authgen()

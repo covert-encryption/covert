@@ -126,6 +126,11 @@ def test_end_to_end_multiple(covert, tmp_path, mocker):
   assert "foo.txt" in cap.err
   assert "Signed by Key[827bc3b2:PK]" in cap.err
 
+  # Decrypt with wrong key
+  cap = covert('dec', '-i', 'tests/keys/ssh_ed25519', fname, exitcode=10)
+  assert not cap.out
+  assert "Not authenticated" in cap.err
+
 
 def test_end_to_end_github(covert, tmp_path, mocker):
   # Enable full status messages
@@ -309,6 +314,21 @@ def test_idstore(covert, mocker, tmp_path):
   # Delete local
   cap = covert("id", "--delete", "alice")
   assert f"alice" not in cap.out
+
+  # Test decryption errors
+
+  mocker.patch("covert.passphrase.ask", return_value=(b"wrong passphrase", True))
+  cap = covert("dec", outfname, exitcode=10)
+  assert "ID store: Not authenticated" in cap.err
+
+  cap = covert("dec", outfname, "-p", exitcode=10)
+  assert "ID store" not in cap.err
+  assert "Not authenticated" in cap.err
+
+  mocker.patch("covert.passphrase.ask", return_value=(b"", True))
+  cap = covert("dec", outfname, exitcode=10)
+  assert "ID store" not in cap.err
+  assert "Too short password" in cap.err
 
   # Shred
   cap = covert("id", "--delete-entire-idstore")
