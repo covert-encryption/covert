@@ -177,6 +177,7 @@ def main_dec(args):
       def authgen():
         nonlocal idkeys
         yield from identities
+        e = None
         with tty.status("Password hashing... "):
           yield from pwhasher
           if idstore.idfilename.exists() and not args.askpass:
@@ -186,9 +187,10 @@ def main_dec(args):
               idkeys = idstore.idkeys(idpwhash)
               yield from idstore.authgen(idpwhash)
             except ValueError as e:
-              idpwhash = None
+              # Treating as error only when suitable passphrase was given
+              if idpwhash: raise ValueError(f"ID store: {e}")
           # Ask for passphrase by default if no other methods were attempted
-          if not (args.askpass or args.passwords or args.identities or idpwhash):
+          if not (args.askpass or args.passwords or args.identities):
             args.askpass = 1
           for i in range(args.askpass):
             yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
