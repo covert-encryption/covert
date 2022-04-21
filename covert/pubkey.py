@@ -10,7 +10,7 @@ import nacl.bindings as sodium
 
 from covert import bech, passphrase, sshkey, util
 from covert.elliptic import egcreate, egreveal
-
+from covert.exceptions import MalformedKeyError, AuthenticationError
 
 class Key:
 
@@ -22,7 +22,7 @@ class Key:
     anykey = sk or pk or edsk or edpk
     # Restore edpk from hidden format
     if pkhash is not None:
-      if anykey: raise ValueError("Invalid Key argument: pkhash cannot be combined with other keys")
+      if anykey: raise MalformedKeyError("Invalid Key argument: pkhash cannot be combined with other keys")
       edpk = bytes(egreveal(pkhash).undirty)
     # Create Ed/Mont/Elligator compatible keys if no parameters were given
     elif not anykey:
@@ -37,7 +37,7 @@ class Key:
       try:
         self.pk = sodium.crypto_sign_ed25519_pk_to_curve25519(self.edpk)
       except RuntimeError:  # Unexpected library error from nacl.bindings
-        raise ValueError("Invalid Ed25519 public key")
+        raise MalformedKeyError("Invalid Ed25519 public key")
     if sk:
       sk = bytes(sk[:32])
       assert not edsk or self.sk == sk
@@ -82,12 +82,12 @@ class Key:
       edsk_hashed = self.sk
       edpk_conv = sodium.crypto_scalarmult_ed25519_base(edsk_hashed)
       if self.edpk and self.edpk != edpk_conv:
-        raise ValueError(f"Secret and public key mismatch\n  {self.edpk.hex()}\n  {edpk_conv.hex()}")
+        raise AuthenticationError(f"Secret and public key mismatch\n  {self.edpk.hex()}\n  {edpk_conv.hex()}")
       self.edpk = edpk_conv
     if self.sk:
       pk_conv = sodium.crypto_scalarmult_base(self.sk)
       if self.pk and self.pk != pk_conv:
-        raise ValueError("Secret and public key mismatch")
+        raise AuthenticationError("Secret and public key mismatch")
       self.pk = pk_conv
 
   def _validate(self):
@@ -149,7 +149,7 @@ def read_sk_file(keystr: str) -> list[Key]:
     try:
       lines = f.read().decode().replace('\r\n', '\n').rstrip().split('\n')
     except ValueError:
-      raise ValueError(f"Keyfile {keystr} could not be decoded. Only UTF-8 text is supported.")
+      raise MalformedKeyError(f"Keyfile {keystr} could not be decoded. Only UTF-8 text is supported.")
     if lines[0] == "-----BEGIN OPENSSH PRIVATE KEY-----":
       keys = sshkey.decode_sk("\n".join(lines))
     elif lines[1].startswith('RWRTY0Iy'):
@@ -186,7 +186,7 @@ def decode_pk(keystr: str) -> Key:
       return Key(keystr=keystr, comment="wg", pk=keybytes)
   except ValueError:
     pass
-  raise ValueError(f"Unrecognized key {keystr}")
+  raise AuthenticationError(f"Unrecognized key {keystr}")
 
 
 def decode_sk(keystr: str) -> Key:
@@ -204,7 +204,7 @@ def decode_sk(keystr: str) -> Key:
         return Key(keystr=keystr, sk=keybytes, comment="wg")
   except ValueError:
     pass
-  raise ValueError(f"Unable to parse secret key {keystr!r}")
+  raise MalformedKeyError(f"Unable to parse secret key {keystr!r}")
 
 
 def decode_sk_minisign(keystr: str, pw: Optional[bytes] = None) -> Key:
@@ -219,7 +219,7 @@ def decode_sk_minisign(keystr: str, pw: Optional[bytes] = None) -> Key:
   data = b64decode(keystr)
   fmt, salt, ops, mem, token = struct.unpack('<6s32sQQ104s', data)
   if fmt != b'EdScB2' or ops != 1 << 25 or mem != 1 << 30:
-    raise ValueError(f'Not a (supported) Minisign secret key {fmt=}')
+    raise MalformedKeyError(f'Not a (supported) Minisign secret key {fmt=}')
   out = sodium.crypto_pwhash_scryptsalsa208sha256_ll(pw, salt, n=1 << 20, r=8, p=1, maxmem=1 << 31, dklen=104)
   token = util.xor(out, token)
   keyid, edsk, edpk, csum = struct.unpack('8s32s32s32s', token)
@@ -227,7 +227,7 @@ def decode_sk_minisign(keystr: str, pw: Optional[bytes] = None) -> Key:
   sodium.crypto_generichash.generichash_blake2b_update(b2state, fmt[:2] + keyid + edsk + edpk)
   csum2 = sodium.crypto_generichash.generichash_blake2b_final(b2state)
   if csum != csum2:
-    raise ValueError('Unable to decrypt Minisign secret key')
+    raise AuthenticationError('Unable to decrypt Minisign secret key')
   return Key(edsk=edsk, edpk=edpk, comment="ms")
 
 

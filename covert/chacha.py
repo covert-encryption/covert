@@ -3,6 +3,7 @@ from nacl.exceptions import CryptoError
 
 from typing import Optional
 from covert.typing import BytesLike
+from covert.exceptions import DecryptError
 
 # The bindings provided in pynacl would only accept bytes (not memoryview etc),
 # and did not provide support for allocating the return buffer in Python.
@@ -11,7 +12,7 @@ from covert.typing import BytesLike
 def decrypt(ciphertext: bytes, aad: Optional[bytes], nonce: bytes, key: bytes) -> bytearray:
   message = bytearray(len(ciphertext) - 16)
   if decrypt_into(message, ciphertext, aad, nonce, key):
-    raise CryptoError('Decryption failed')
+    raise DecryptError('Decryption failed')
   return message
 
 

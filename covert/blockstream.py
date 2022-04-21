@@ -6,12 +6,11 @@ from contextlib import contextmanager, suppress
 from hashlib import sha512
 from secrets import token_bytes
 
-from nacl.exceptions import CryptoError
-
 from covert import chacha, pubkey, ratchet
 from covert.cryptoheader import Header, encrypt_header
 from covert.elliptic import xed_sign, xed_verify
 from covert.util import noncegen
+from covert.exceptions import AuthenticationError, DecryptError
 
 from typing import Generator, Optional, Union
 from io import BytesIO, FileIO
@@ -24,7 +23,7 @@ def decrypt_file(auth: Generator, f: BytesIO, archive: Archive):
   with b.decrypt_init(f):
     if not b.header.key:
       for a in auth:
-        with suppress(CryptoError):
+        with suppress(DecryptError):
           b.authenticate(a)
           break
       # In case auth is a generator, close it immediately (otherwise would be delayed)
@@ -110,7 +109,7 @@ class BlockStream:
 
   def decrypt_blocks(self):
     if not self.header.key:
-      raise ValueError("Not authenticated")
+      raise AuthenticationError("Not authenticated")
     self.key = self.header.key
     self.nonce = noncegen(self.header.nonce)
     self.blkhash = b""
@@ -136,7 +135,7 @@ class BlockStream:
           self.blkhash = sha512(self.blkhash + self.ciphertext[p + elen - 16:p + elen]).digest()
           yield block[:-3]
           break  # Buffer more blocks
-        except CryptoError:
+        except DecryptError:
           # Reset the queue and try again at failing pos with new nextlen if available
           for qq in self.q:
             qq[0].cancel()
@@ -171,13 +170,13 @@ class BlockStream:
         ksig = self.blkhash[:32]
         try:
           signature = chacha.decrypt(sigblock, None, nsig, ksig)
-        except CryptoError:
+        except DecryptError:
           a.signatures.append((False, key, 'Signature corrupted or data manipulated'))
           continue
         try:
           xed_verify(key.pk, self.blkhash, signature)
           a.signatures.append((True, key, 'Signed by'))
-        except CryptoError:
+        except DecryptError:
           a.signatures.append((False, key, 'Forged signature'))
 
 

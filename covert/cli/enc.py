@@ -11,12 +11,13 @@ from covert.archive import Archive
 from covert.blockstream import encrypt_file
 from covert.cli import tty
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
+from covert.exceptions import CliArgError
 
 
 def main_enc(args):
   padding = .01 * float(args.padding) if args.padding is not None else .05
   if not 0 <= padding <= 3.0:
-    raise ValueError('Invalid padding specified. The valid range is 0 to 300 %.')
+    raise CliArgError('Invalid padding specified. The valid range is 0 to 300 %.')
   # Passphrase encryption by default if no auth is specified
   if not (args.idname or args.askpass or args.passwords or args.recipients or args.recipfiles or args.wideopen):
     args.askpass = 1
@@ -27,9 +28,9 @@ def main_enc(args):
       recipients.append(pubkey.decode_pk(keystr))
     except ValueError as e:
       if keystr.startswith("github:"):
-        raise ValueError(f"Unrecognized recipient string. Download a key from Github by -R {keystr}")
+        raise CliArgError(f"Unrecognized recipient string. Download a key from Github by -R {keystr}")
       elif os.path.isfile(keystr):
-        raise ValueError(f"Unrecognized recipient string. Use a keyfile by -R {keystr}")
+        raise CliArgError(f"Unrecognized recipient string. Use a keyfile by -R {keystr}")
       raise
   for fn in args.recipfiles:
     recipients += pubkey.read_pk_file(fn)
@@ -39,16 +40,16 @@ def main_enc(args):
   if len(recipients) < l:
     sys.stderr.write(' ⚠️ Duplicate recipient keys dropped.\n')
   if args.idname and len(recipients) > 1:
-    raise ValueError("Only one recipient may be specified for ID store.")
+    raise CliArgError("Only one recipient may be specified for ID store.")
   # Signatures
   signatures = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr) if key.edsk}
   signatures = list(sorted(signatures, key=str))
   if args.idname and len(signatures) > 1:
-    raise ValueError("Only one secret key may be specified for ID store.")
+    raise CliArgError("Only one secret key may be specified for ID store.")
   # Ask passphrases
   if args.idname:
-    if len(signatures) > 1: raise ValueError("Only one secret key may be associated with an identity.")
-    if len(recipients) > 1: raise ValueError("Only one recipient key may be associated with an identity.")
+    if len(signatures) > 1: raise CliArgError("Only one secret key may be associated with an identity.")
+    if len(recipients) > 1: raise CliArgError("Only one recipient key may be associated with an identity.")
     if idstore.idfilename.exists():
       idpass, _ = passphrase.ask("Master ID passphrase")
     else:
@@ -123,8 +124,8 @@ def main_enc(args):
   if args.armor or not args.outfile and sys.stdout.isatty():
     if a.total_size > (ARMOR_MAX_SIZE if args.outfile else TTY_MAX_SIZE):
       if not args.outfile:
-        raise ValueError("Too much data for console. How about -o FILE to write a file?")
-      raise ValueError("The data is too large for --armor.")
+        raise CliArgError("Too much data for console. How about -o FILE to write a file?")
+      raise CliArgError("The data is too large for --armor.")
     outf = BytesIO()
   else:
     outf = realoutf

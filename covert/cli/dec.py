@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pyperclip
-from nacl.exceptions import CryptoError
+from covert.exceptions import DecryptError
 from tqdm import tqdm
 
 from covert import idstore, lazyexec, passphrase, pubkey, util
@@ -15,6 +15,7 @@ from covert.archive import Archive
 from covert.blockstream import BlockStream
 from covert.cli import tty
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
+from covert.exceptions import CliArgError
 
 idpwhash = None
 
@@ -137,7 +138,7 @@ def run_decryption(infile, args, b, idkeys):
 
 def main_dec(args):
   if len(args.files) > 1:
-    raise ValueError("Only one input file is allowed when decrypting.")
+    raise CliArgError("Only one input file is allowed when decrypting.")
   identities = {key for keystr in args.identities for key in pubkey.read_sk_any(keystr)}
   identities = list(sorted(identities, key=str))
   infile = open(args.files[0], "rb") if args.files else sys.stdin.buffer
@@ -189,14 +190,14 @@ def main_dec(args):
               yield from idstore.authgen(idpwhash)
             except ValueError as e:
               # Treating as error only when suitable passphrase was given
-              if idpwhash: raise ValueError(f"ID store: {e}")
+              if idpwhash: raise CliArgError(f"ID store: {e}")
           # Ask for passphrase if asked for or if no other methods were attempted
           if args.askpass or not (args.passwords or args.identities):
             yield passphrase.pwhash(passphrase.ask('Passphrase')[0])
       if not b.header.key:
         auth = authgen()
         for a in auth:
-          with suppress(CryptoError):
+          with suppress(DecryptError):
             b.authenticate(a)
             break
         auth.close()

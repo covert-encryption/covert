@@ -1,7 +1,7 @@
 from secrets import token_bytes
 
 import pytest
-from nacl.exceptions import CryptoError
+from covert.exceptions import DecryptError
 
 from covert import chacha
 
@@ -29,5 +29,5 @@ def test_simple():
   pt = chacha.decrypt(ct, None, nonce, key)
   assert pt == b'testing'
 
-  with pytest.raises(CryptoError):
+  with pytest.raises(DecryptError):
     chacha.decrypt(bytes(64), b'foo', nonce, key)

@@ -3,10 +3,10 @@ from contextlib import suppress
 import time
 
 import nacl.bindings as sodium
-from nacl.exceptions import CryptoError
 
 from covert.chacha import decrypt, encrypt
 from covert.pubkey import Key, derive_symkey
+from covert.exceptions import DecryptError
 
 MAXSKIP = 20
 
@@ -115,11 +115,11 @@ class Ratchet:
   def init_alice(self, ciphertext):
     """Alice's init when receiving initial ratchet reply from Bob."""
     for hkey, n in itertools.product(self.pre, range(MAXSKIP)):
-      with suppress(CryptoError):
+      with suppress(DecryptError):
         header = decrypt(ciphertext[:50], None, n.to_bytes(12, "little"), hkey)
         break
     else:
-      raise CryptoError("No ratchet established, unable to decrypt")
+      raise DecryptError("No ratchet established, unable to decrypt")
     self.pre = []
     self.RK = hkey
     self.r.NHK = hkey
@@ -140,7 +140,7 @@ class Ratchet:
     # Try skipped keys
     for s in self.msg:
       hkey, n = s['H'], s['N']
-      with suppress(CryptoError):
+      with suppress(DecryptError):
         header = decrypt(ciphertext[:50], None, n.to_bytes(12, "little"), hkey)
         s['e'] = expire_soon()
         s['r'] = True
@@ -151,21 +151,21 @@ class Ratchet:
     # Try with current header key
     if self.r.HK:
       for n in range(self.r.N, self.r.N + MAXSKIP):
-        with suppress(CryptoError):
+        with suppress(DecryptError):
           header = decrypt(ciphertext[:50], None, n.to_bytes(12, "little"), self.r.HK)
           self.skip_until(n)
           break
     # Try with next header key
     if not header:
       for n in range(MAXSKIP):
-        with suppress(CryptoError):
+        with suppress(DecryptError):
           header = decrypt(ciphertext[:50], None, n.to_bytes(12, "little"), self.r.NHK)
           PN = int.from_bytes(header[32:34], "little")
           self.skip_until(PN)
           self.dhratchet(Key(pk=header[:32]))
           self.skip_until(n)
     if not header:
-      raise CryptoError(f"Unable to authenticate")
+      raise DecryptError(f"Unable to authenticate")
     self.e = expire_later()
     # Advance receiving chain
     return self.readmsg()

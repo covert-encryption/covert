@@ -9,6 +9,7 @@ from covert.cli.__main__ import main
 from covert.cli.args import argparse
 from covert.cli.dec import main_dec
 from covert.cli.edit import main_edit
+from covert.exceptions import CliArgError
 
 
 def test_argparser(capsys):
@@ -62,7 +63,7 @@ def test_argparser(capsys):
 def covert(monkeypatch, capsys):
   def run_main(*args, stdin="", exitcode=0):
     if args and args[0] == "covert":
-      raise ValueError("Only arguments please, no 'covert' in the beginning")
+      raise CliArgError("Only arguments please, no 'covert' in the beginning")
     sys.argv = [str(arg) for arg in ("covert", *args)]
     monkeypatch.setattr("sys.stdin", TextIOWrapper(BytesIO(stdin.encode())))  # Inject stdin
     monkeypatch.setattr("covert.passphrase.ARGON2_MEMLIMIT", 1 << 20)  # Gotta go faster
@@ -496,12 +497,12 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
   assert not cap.out
   assert "Unknown argument" in cap.err
 
-  with pytest.raises(ValueError):
+  with pytest.raises(CliArgError):
     cap = covert("-e", "-o", "test.dat", "-o", "test2.dat", exitcode=1)
     assert not cap.out
     assert "Only one output file may be specified" in cap.err
 
-  with pytest.raises(ValueError):
+  with pytest.raises(CliArgError):
     cap = covert("-eaR", "tests/keys/ssh_ed25519.pub", fname, "-o", fname, exitcode=1)
     assert not cap.out
     assert "In-place operation is not supported" in cap.err
@@ -528,12 +529,12 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
 def test_files_count():
   sys.argv = "covert dec testfile1.txt testfile2.txt".split()
   args = argparse()
-  with pytest.raises(ValueError) as exc:
+  with pytest.raises(CliArgError) as exc:
     main_dec(args)
   assert "Only one input file is allowed when decrypting" in str(exc.value)
 
   sys.argv = "covert edit".split()
   args = argparse()
-  with pytest.raises(ValueError) as exc:
+  with pytest.raises(CliArgError) as exc:
     main_edit(args)
   assert "Edit mode requires an encrypted archive filename" in str(exc.value)

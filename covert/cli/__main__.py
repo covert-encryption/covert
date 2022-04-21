@@ -9,6 +9,7 @@ from covert.cli.dec import main_dec
 from covert.cli.edit import main_edit
 from covert.cli.enc import main_enc
 from covert.cli.id import main_id
+from covert.exceptions import CliArgError
 
 modes = {
   "enc": main_enc,
@@ -38,12 +39,12 @@ def main() -> NoReturn:
   # CLI argument processing
   args = argparse()
   if len(args.outfile) > 1:
-    raise ValueError('Only one output file may be specified')
+    raise CliArgError('Only one output file may be specified')
   args.outfile = args.outfile[0] if args.outfile else None
 
   # A quick sanity check, not entirely reliable
   if args.outfile in args.files:
-    raise ValueError('In-place operation is not supported, cannot use the same file as input and output.')
+    raise CliArgError('In-place operation is not supported, cannot use the same file as input and output.')
 
   # Run the mode-specific main function
   if args.debug:
