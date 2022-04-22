@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from nacl.exceptions import CryptoError
 from PySide6.QtCore import QSize, Qt, Slot
 from PySide6.QtGui import QKeySequence, QShortcut, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import *
@@ -68,7 +67,7 @@ class DecryptView(QWidget):
     self.pw.setText("")
     try:
       self.blockstream.authenticate(pwhash)
-    except CryptoError:
+    except DecryptError:
       self.app.flash("The passphrase was incorrect.")
       return
     self.decrypt_attempt()
@@ -95,7 +94,7 @@ class DecryptView(QWidget):
     for i, k in enumerate(keys):
       try:
         self.blockstream.authenticate(k)
-      except CryptoError as e:
+      except DecryptError as e:
         if i < len(keys) - 1: continue
         self.app.flash(str(e) or "No suitable key found.")
         return

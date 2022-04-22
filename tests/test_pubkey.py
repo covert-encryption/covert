@@ -4,6 +4,7 @@ from secrets import token_bytes
 import nacl.bindings as sodium
 
 from covert import pubkey
+from covert.exceptions import MalformedKeyError
 import pytest
 
 
@@ -54,7 +55,7 @@ def test_wireguard_keystr():
 
   # Trying to decode a public key as secret key should usually fail
   # (works with the test key but no guarantees with others)
-  with pytest.raises(ValueError) as exc:
+  with pytest.raises(MalformedKeyError) as exc:
     pubkey.decode_sk(WG_PK)
   assert "Unable to parse secret key" in str(exc.value)
 

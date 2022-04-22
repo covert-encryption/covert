@@ -3,14 +3,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 from covert import idstore, passphrase, pubkey
 from covert.cli import tty
+from covert.exceptions import CliArgError
 
 
 def main_id(args):
   if len(args.files) > 1:
-    raise ValueError("Argument error, one ID at most should be specified")
+    raise CliArgError("Argument error, one ID at most should be specified")
   if args.delete_entire_idstore:
     if args.files:
-      raise ValueError("No ID should be provided with --delete-entire-idstore")
+      raise CliArgError("No ID should be provided with --delete-entire-idstore")
     try:
       idstore.delete_entire_idstore()
       sys.stderr.write(f"{idstore.idfilename} shredded and deleted.\n")
@@ -26,22 +27,22 @@ def main_id(args):
   else:
     tagself = tagpeer = None
   if args.delete and not tagself:
-    raise ValueError("Need an ID of form yourname or yourname:peername to delete.")
+    raise CliArgError("Need an ID of form yourname or yourname:peername to delete.")
   # Load keys from command line
   selfkey = peerkey = None
   if args.recipients or args.recipfiles:
-    if not tagpeer: raise ValueError("Need an ID of form yourname:peername to assign a public key")
-    if len(args.recipients) + len(args.recipfiles) > 1: raise ValueError("Only one public key may be specified for ID store")
+    if not tagpeer: raise CliArgError("Need an ID of form yourname:peername to assign a public key")
+    if len(args.recipients) + len(args.recipfiles) > 1: raise CliArgError("Only one public key may be specified for ID store")
     peerkey = pubkey.decode_pk(args.recipients[0]) if args.recipients else pubkey.read_pk_file(args.recipfiles[0])[0]
   if args.identities:
-    if not tagself: raise ValueError("Need an ID to assign a secret key.")
-    if len(args.identities) > 1: raise ValueError("Only one secret key may be specified for ID store")
+    if not tagself: raise CliArgError("Need an ID to assign a secret key.")
+    if len(args.identities) > 1: raise CliArgError("Only one secret key may be specified for ID store")
     selfkey = pubkey.read_sk_any(args.identities[0])[0]
   # First run UX
   create_idstore = not idstore.idfilename.exists()
   if create_idstore:
-    if not tagself: raise ValueError("To create a new ID store, specify an ID to create e.g.\n  covert id alice\n")
-    if tagpeer and not peerkey: raise ValueError(f"No public key provided for new peer {tagpeer}.")
+    if not tagself: raise CliArgError("To create a new ID store, specify an ID to create e.g.\n  covert id alice\n")
+    if tagpeer and not peerkey: raise CliArgError(f"No public key provided for new peer {tagpeer}.")
     sys.stderr.write(f" 🗄️  Creating {idstore.idfilename}\n")
   # Passphrases
   idpass = newpass = None
@@ -80,7 +81,7 @@ def main_id(args):
       ids[tagself]["I"] = selfkey.sk
     # Update/add peer public key?
     if tagpeer and tagpeer not in ids:
-      if not peerkey: raise ValueError(f"No public key provided for new peer {tagpeer}.")
+      if not peerkey: raise CliArgError(f"No public key provided for new peer {tagpeer}.")
       if tagpeer not in ids: ids[tagpeer] = dict()
       ids[tagpeer]["i"] = peerkey.pk
     # Print keys

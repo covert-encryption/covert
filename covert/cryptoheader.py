@@ -1,13 +1,12 @@
 import random
 from contextlib import suppress
 
-from nacl.exceptions import CryptoError
-
 from covert import chacha, passphrase, pubkey, ratchet, util
 
 from typing import Generator, Tuple, Union, Optional
 from covert.typing import BytesLike
 from covert.pubkey import Key
+from covert.exceptions import DecryptError
 
 def encrypt_header(auth) -> Tuple[bytes, Generator, bytes]:
   wideopen, pwhashes, recipients, identities = auth
@@ -55,7 +54,7 @@ class Header:
     self.ratchet: Optional[ratchet.Ratchet] = None
     self.block0pos = None
     self.block0len = None
-    with suppress(CryptoError):
+    with suppress(DecryptError):
       # Try wide-open
       self._find_block0(bytes(32), 12)
       self.slot = "wide-open"
@@ -75,7 +74,7 @@ class Header:
     try:
       self._find_block0(authkey, 12)
       self.slot = "passphrase"
-    except CryptoError:
+    except DecryptError:
       self._find_slots(authkey)
 
   def _find_slots(self, authkey):
@@ -86,20 +85,20 @@ class Header:
     for i, s in enumerate(slots):
       key = util.xor(s, authkey)
       for hbegin in slotends[i:]:
-        with suppress(CryptoError):
+        with suppress(DecryptError):
           self._find_block0(key, hbegin)
           self.slot = i, self.block0pos // 32
           return
-    raise CryptoError
+    raise DecryptError
 
   def _find_block0(self, key, begin):
     ct = self.ciphertext
     for end in reversed(range(begin + 19, 1 + min(1024, len(ct)))):
-      with suppress(CryptoError):
+      with suppress(DecryptError):
         self.block0 = chacha.decrypt(ct[begin:end], ct[:begin], self.nonce, key)
         break
     else:
-      raise CryptoError
+      raise DecryptError
     self.key = key
     self.block0pos = begin
     self.block0len = end - begin - 19

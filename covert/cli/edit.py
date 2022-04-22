@@ -5,11 +5,12 @@ from covert import passphrase, util
 from covert.archive import Archive, FileRecord
 from covert.blockstream import decrypt_file, encrypt_file
 from covert.cli import tty
+from covert.exceptions import CliArgError
 
 
 def main_edit(args):
   if len(args.files) != 1:
-    raise ValueError("Edit mode requires an encrypted archive filename (or '-' to use stdio).")
+    raise CliArgError("Edit mode requires an encrypted archive filename (or '-' to use stdio).")
   fname = args.files[0]
   # Read all of input file (or stdin) to RAM
   if fname is True:

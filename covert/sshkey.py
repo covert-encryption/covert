@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers.modes import CTR
 
 from covert import passphrase, pubkey, util
+from covert.exceptions import MalformedKeyError, AuthenticationError
 
 HEADER = "-----BEGIN OPENSSH PRIVATE KEY-----"
 FOOTER = "-----END OPENSSH PRIVATE KEY-----"
@@ -39,7 +40,7 @@ def decode_sk(pem: str, pw=None) -> List[pubkey.Key]:
   def read_uint32():
     nonlocal data
     if len(data) < 4:
-      raise ValueError("Invalid SSH secret key (cannot read int)")
+      raise MalformedKeyError("Invalid SSH secret key (cannot read int)")
     n = int.from_bytes(data[:4], "big")
     data = data[4:]
     return n
@@ -47,7 +48,7 @@ def decode_sk(pem: str, pw=None) -> List[pubkey.Key]:
   def read_bytes(n):
     nonlocal data
     if n > len(data):
-      raise ValueError(f" {data[:4]} {n} Invalid SSH secret key (cannot read data)")
+      raise MalformedKeyError(f" {data[:4]} {n} Invalid SSH secret key (cannot read data)")
     s = data[:n]
     data = data[n:]
     return s
@@ -55,7 +56,7 @@ def decode_sk(pem: str, pw=None) -> List[pubkey.Key]:
   # Overall format (header + potentially encrypted blob)
   magic = read_bytes(15)
   if magic != b'openssh-key-v1\0':
-    raise ValueError("Invalid SSH secret key magic")
+    raise MalformedKeyError("Invalid SSH secret key magic")
   cipher = read_string()
   kdfname = read_string()
   kdfopts = read_string()
@@ -76,7 +77,7 @@ def decode_sk(pem: str, pw=None) -> List[pubkey.Key]:
     rounds = read_uint32()
     # 16 is a normal value
     if rounds > 1000:
-      raise ValueError("SSH secret key KDF rounds too high")
+      raise MalformedKeyError("SSH secret key KDF rounds too high")
     if pw is None:
       pw = passphrase.ask("SSH secret key password")[0]
     if not pw:
@@ -84,11 +85,11 @@ def decode_sk(pem: str, pw=None) -> List[pubkey.Key]:
     keyiv = bcrypt.kdf(pw, salt, 32 + 16, rounds, ignore_few_rounds=True)
     data = decrypt(encrypted, keyiv[32:], keyiv[:32])
   else:
-    raise ValueError("Unsupported SSH keyfile {cipher=!r} {kdfname=!r}")
+    raise AuthenticationError("Unsupported SSH keyfile {cipher=!r} {kdfname=!r}")
 
   # Check if valid
   if read_uint32() != read_uint32():
-    raise ValueError("Unable to decrypt SSH keyfile")
+    raise AuthenticationError("Unable to decrypt SSH keyfile")
 
   # Read secret keys
   secretkeys = []

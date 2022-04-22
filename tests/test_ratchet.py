@@ -2,11 +2,11 @@ from copy import deepcopy
 from secrets import token_bytes
 
 import pytest
-from nacl.exceptions import CryptoError
 
 from covert.idstore import remove_expired
 from covert.pubkey import Key
 from covert.ratchet import Ratchet
+from covert.exceptions import DecryptError
 
 
 def test_ratchet_pubkey():
@@ -95,7 +95,7 @@ def test_ratchet_lost_messages():
   assert mka1 == mkb1
 
   # Fail to decode own message
-  with pytest.raises(CryptoError):
+  with pytest.raises(DecryptError):
     b.receive(header1)
 
 
