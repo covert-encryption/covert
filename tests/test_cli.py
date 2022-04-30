@@ -210,6 +210,24 @@ def test_end_to_end_large_file(covert, tmp_path):
   assert not cap.out
   assert "The data is too large for --armor." in cap.err
 
+  # Try encrypting with -o in binary format
+  cap = covert("enc", "-Ro", "tests/keys/ssh_ed25519.pub", outfname, fname)
+  assert not cap.out
+
+  # Try decrypting
+  cap = covert("dec", "-i", "tests/keys/ssh_ed25519", outfname)
+  assert not cap.out
+  assert "test.dat" in cap.err
+
+  # Truncate the encrypted file
+  with open(f"{outfname}", "r+") as f:
+    f.truncate(42505855)
+
+  # Try decrypting
+  cap = covert("dec", "-i", "tests/keys/ssh_ed25519", outfname, exitcode=12)
+  assert not cap.out
+  assert "Data corruption" in cap.err
+
 
 def test_end_to_end_edit(covert, tmp_path, mocker):
   fname = tmp_path / "crypto.covert"
