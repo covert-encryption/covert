@@ -128,7 +128,7 @@ def test_end_to_end_multiple(covert, tmp_path, mocker):
   assert "Signed by Key[827bc3b2:PK]" in cap.err
 
   # Decrypt with wrong key
-  cap = covert('dec', '-i', 'tests/keys/ssh_ed25519', fname, exitcode=10)
+  cap = covert('dec', '-i', 'tests/keys/ssh_ed25519', fname, exitcode=11)
   assert not cap.out
   assert "Not authenticated" in cap.err
 
@@ -209,6 +209,24 @@ def test_end_to_end_large_file(covert, tmp_path):
   cap = covert("-eaRo", "tests/keys/ssh_ed25519.pub", outfname, fname, exitcode=10)
   assert not cap.out
   assert "The data is too large for --armor." in cap.err
+
+  # Try encrypting with -o in binary format
+  cap = covert("enc", "-Ro", "tests/keys/ssh_ed25519.pub", outfname, fname)
+  assert not cap.out
+
+  # Try decrypting
+  cap = covert("dec", "-i", "tests/keys/ssh_ed25519", outfname)
+  assert not cap.out
+  assert "test.dat" in cap.err
+
+  # Truncate the encrypted file
+  with open(f"{outfname}", "r+") as f:
+    f.truncate(42505855)
+
+  # Try decrypting
+  cap = covert("dec", "-i", "tests/keys/ssh_ed25519", outfname, exitcode=12)
+  assert not cap.out
+  assert "Data corruption" in cap.err
 
 
 def test_end_to_end_edit(covert, tmp_path, mocker):
@@ -319,10 +337,10 @@ def test_idstore(covert, mocker, tmp_path):
   # Test decryption errors
 
   mocker.patch("covert.passphrase.ask", return_value=(b"wrong passphrase", True))
-  cap = covert("dec", outfname, exitcode=10)
+  cap = covert("dec", outfname, exitcode=11)
   assert "ID store: Not authenticated" in cap.err
 
-  cap = covert("dec", outfname, "-p", exitcode=10)
+  cap = covert("dec", outfname, "-p", exitcode=11)
   assert "ID store" not in cap.err
   assert "Not authenticated" in cap.err
 
@@ -416,15 +434,15 @@ def test_errors(covert):
   # FIXME: These should probably have status code 1 like the other argument errors do
   # Needs more exception types to implement such distinction.
 
-  cap = covert("enc", "-r", "github:covert-encryption", exitcode=10)
+  cap = covert("enc", "-r", "github:covert-encryption", exitcode=1)
   assert not cap.out
   assert "Unrecognized recipient string. Download a key from Github by -R github:covert-encryption" in cap.err
 
-  cap = covert("enc", "-r", "tests/keys/ssh_ed25519.pub", exitcode=10)
+  cap = covert("enc", "-r", "tests/keys/ssh_ed25519.pub", exitcode=1)
   assert not cap.out
   assert "Unrecognized recipient string. Use a keyfile by -R tests/keys/ssh_ed25519.pub" in cap.err
 
-  cap = covert("enc", "-r", "not-a-file-either", exitcode=10)
+  cap = covert("enc", "-r", "not-a-file-either", exitcode=4)
   assert not cap.out
   assert "Unrecognized key not-a-file-either" in cap.err
 
@@ -432,11 +450,11 @@ def test_errors(covert):
   assert not cap.out
   assert "Peer not in ID store. You need to specify a recipient public key on the first use." in cap.err
 
-  cap = covert("id", "alice", "bob", exitcode=10)
+  cap = covert("id", "alice", "bob", exitcode=1)
   assert not cap.out
   assert "one ID at most should be specified" in cap.err
 
-  cap = covert("id", "alice", "--delete-entire-idstore", exitcode=10)
+  cap = covert("id", "alice", "--delete-entire-idstore", exitcode=1)
   assert not cap.out
   assert "No ID should be provided with --delete-entire-idstore" in cap.err
 
@@ -445,31 +463,31 @@ def test_errors(covert):
   assert not cap.out
   assert "does not exist" in cap.err
 
-  cap = covert("id", "--delete", exitcode=10)
+  cap = covert("id", "--delete", exitcode=1)
   assert not cap.out
   assert "Need an ID of form yourname or yourname:peername to delete." in cap.err
 
-  cap = covert("id", "-i", "tests/keys/ssh_ed25519.pub", exitcode=10)
+  cap = covert("id", "-i", "tests/keys/ssh_ed25519.pub", exitcode=1)
   assert not cap.out
   assert "Need an ID to assign a secret key." in cap.err
 
-  cap = covert("id", "alice", "-R", "tests/keys/ssh_ed25519.pub", exitcode=10)
+  cap = covert("id", "alice", "-R", "tests/keys/ssh_ed25519.pub", exitcode=1)
   assert not cap.out
   assert "Need an ID of form yourname:peername to assign a public key" in cap.err
 
-  cap = covert("id", "alice:bob", "-R", "tests/keys/ssh_ed25519.pub", "-r", "age1fakekey", exitcode=10)
+  cap = covert("id", "alice:bob", "-R", "tests/keys/ssh_ed25519.pub", "-r", "age1fakekey", exitcode=1)
   assert not cap.out
   assert "Only one public key may be specified" in cap.err
 
-  cap = covert("id", "alice", "-i", "tests/keys/ssh_ed25519", "-i", "tests/keys/minisign.key", exitcode=10)
+  cap = covert("id", "alice", "-i", "tests/keys/ssh_ed25519", "-i", "tests/keys/minisign.key", exitcode=1)
   assert not cap.out
   assert "Only one secret key may be specified for ID store" in cap.err
 
-  cap = covert("id", exitcode=10)
+  cap = covert("id", exitcode=1)
   assert not cap.out
   assert "To create a new ID store, specify an ID to create" in cap.err
 
-  cap = covert("id", "alice:bob", exitcode=10)
+  cap = covert("id", "alice:bob", exitcode=1)
   assert not cap.out
   assert "No public key provided for new peer id:alice:bob." in cap.err
 
@@ -515,13 +533,13 @@ def test_miscellaneous(covert, tmp_path, capsys, mocker):
   assert not cap.err
 
   mocker.patch("covert.passphrase.ask", side_effect=KeyboardInterrupt("Testing interrupt"))
-  cap = covert("enc", exitcode=2)
+  cap = covert("enc", exitcode=3)
   assert not cap.out
   assert "Interrupted." in cap.err
 
   # A typical case of Broken Pipe: the program being piped to exits and then stdout writes fail
   mocker.patch("sys.stdout.buffer.write", side_effect=BrokenPipeError())
-  cap = covert("-eR", "tests/keys/ssh_ed25519.pub", fname, exitcode=3)
+  cap = covert("-eR", "tests/keys/ssh_ed25519.pub", fname, exitcode=2)
   assert not cap.out
   assert "I/O error (broken pipe)" in cap.err
 

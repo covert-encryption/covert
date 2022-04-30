@@ -186,7 +186,7 @@ def decode_pk(keystr: str) -> Key:
       return Key(keystr=keystr, comment="wg", pk=keybytes)
   except ValueError:
     pass
-  raise AuthenticationError(f"Unrecognized key {keystr}")
+  raise MalformedKeyError(f"Unrecognized key {keystr}")
 
 
 def decode_sk(keystr: str) -> Key:
