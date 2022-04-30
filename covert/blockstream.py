@@ -142,6 +142,7 @@ class BlockStream:
           self.q.clear()
           extlen = nextlen + 19
           if elen == extlen:
+            # TODO: Detect whether there is EOF (file truncated) vs. actual corruption and raise a better message.
             raise DecryptError(f"Data corruption: Failed to decrypt ciphertext block of {extlen} bytes") from None
           self.nonce = noncegen(nblk)
           self.pos = self._add_to_queue(p, extlen)
