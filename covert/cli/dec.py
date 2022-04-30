@@ -15,7 +15,7 @@ from covert.archive import Archive
 from covert.blockstream import BlockStream
 from covert.cli import tty
 from covert.util import ARMOR_MAX_SIZE, TTY_MAX_SIZE
-from covert.exceptions import CliArgError
+from covert.exceptions import AuthenticationError, CliArgError
 
 idpwhash = None
 
@@ -188,9 +188,9 @@ def main_dec(args):
               idpwhash = passphrase.pwhash(passphrase.ask("Master ID passphrase")[0])
               idkeys = idstore.idkeys(idpwhash)
               yield from idstore.authgen(idpwhash)
-            except ValueError as e:
+            except AuthenticationError as e:
               # Treating as error only when suitable passphrase was given
-              if idpwhash: raise CliArgError(f"ID store: {e}")
+              if idpwhash: raise AuthenticationError(f"ID store: {e}")
           # Ask for passphrase if asked for or if no other methods were attempted
           if args.askpass or not (args.passwords or args.identities):
             yield passphrase.pwhash(passphrase.ask('Passphrase')[0])

@@ -1,8 +1,8 @@
 class AuthenticationError(ValueError):
-  """Wrong key"""
+  """Authentication needed but not provided or is invalid"""
 
-class MalformedKeyError(ValueError):
-  """Key string is malformed"""
+class MalformedKeyError(AuthenticationError):
+  """Key string is malformed or keyfile is unsupported/corrupt"""
 
 class DecryptError(ValueError):
   """Decryption failed"""

@@ -124,8 +124,8 @@ def main_enc(args):
   if args.armor or not args.outfile and sys.stdout.isatty():
     if a.total_size > (ARMOR_MAX_SIZE if args.outfile else TTY_MAX_SIZE):
       if not args.outfile:
-        raise CliArgError("Too much data for console. How about -o FILE to write a file?")
-      raise CliArgError("The data is too large for --armor.")
+        raise ValueError("Too much data for console. How about -o FILE to write a file?")
+      raise ValueError("The data is too large for --armor.")
     outf = BytesIO()
   else:
     outf = realoutf
