@@ -165,9 +165,11 @@ class Terminal:
       for ch in self.tty.read(16384).decode():
         if self.esc:
           self.esc += ch
-          if self.esc in ("\x1B[", "\x1B[3"): continue
+          if self.esc.startswith("\x1B[") and all(ch.isnumeric() or ch == ";" for ch in self.esc[2:]): continue
           elif self.esc == '\x1B\x1B': yield "ESC"
           elif self.esc == "\x1B[3~": yield 'DEL'
+          elif self.esc == "\x1B[1;5C": yield "CTRL-RIGHT"
+          elif self.esc == "\x1B[1;5D": yield "CTRL-LEFT"
           elif len(self.esc) == 3:
             if ch == 'A': yield 'UP'
             elif ch == 'B': yield 'DOWN'
