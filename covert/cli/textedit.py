@@ -3,13 +3,13 @@ from shutil import get_terminal_size
 from typing import List
 
 
-def word_wrap(lines: List):
+def word_wrap(lines: List[str]):
   rtext = [""]
-  dict = []
+  linenums: List[int] = []
   curlength = maxi = 0
   MAX_CHARACTERS = os.get_terminal_size().columns
   for i, line in enumerate(lines):
-    dict.insert(len(dict), i)
+    linenums.insert(len(linenums), i)
     if len(line) >= MAX_CHARACTERS:
       words = []
       start = 0
@@ -46,7 +46,7 @@ def word_wrap(lines: List):
             else:
               rtext.append(word[maxi:maxi - 1 + MAX_CHARACTERS])
               curlength = len(rtext[len(rtext) - 1])
-              dict.insert(len(dict), i)
+              linenums.append(i)
 
             # - 1 is needed to wrap the last character in line correctly
             maxi += MAX_CHARACTERS - 1
@@ -54,13 +54,13 @@ def word_wrap(lines: List):
           # The last part of a long word, that is shorter than line length
           if maxi > 0:
             rtext.append(word[maxi:])
-            dict.insert(len(dict), i)
+            linenums.append(i)
             curlength = len(word[maxi:])
             maxi = 0
 
           elif curlength + (len(word) + 1) >= MAX_CHARACTERS:
             rtext.append(word)
-            dict.insert(len(dict), i)
+            linenums.append(i)
             curlength = len(word)
 
           else:
@@ -75,8 +75,8 @@ def word_wrap(lines: List):
     rtext.append("")
     # needed to not create unnecessary empty line in rare cases
     curlength = 0
-  dict.insert(len(dict), i + 1)
-  return rtext, dict
+  linenums.insert(len(linenums), i + 1)
+  return rtext, linenums
 
 def edit(term, lines: List[str]):
   startrow = row = col = 0
@@ -84,17 +84,17 @@ def edit(term, lines: List[str]):
     win = get_terminal_size()
     MAX_CHARACTERS = get_terminal_size().columns
 
-    drawdata, dict = word_wrap(lines)
+    drawdata, linenums = word_wrap(lines)
 
     # gets the right displayed row, accounting for above wrapped lines
     drow = 0
     if row > 0:
       drow -= 2
       for id, line in enumerate(drawdata):
-        if dict[id] <= row:
-          if dict[id] == row:
+        if linenums[id] <= row:
+          if linenums[id] == row:
             # if future line is a wrapped line
-            if (len(dict) > id + 1) and (dict[id + 1] == row):
+            if (len(linenums) > id + 1) and (linenums[id + 1] == row):
               drow += 2
               break
           drow += 1
