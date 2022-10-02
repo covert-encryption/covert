@@ -138,7 +138,7 @@ def ask(prompt, create=False):
         elif ch == 'END': pos = len(pwd)
         elif ch == "ENTER":
           if valid: return util.encode(pwd), visible
-          if create:
+          if not pwd and create:
             pwd = generate(wordcount)
             return util.encode(pwd), True
         elif ch == "ESC":
