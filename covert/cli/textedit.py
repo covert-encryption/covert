@@ -196,13 +196,12 @@ def edit(term, lines: List[str]):
           elif row > 0:
             row -= 1
             col = len(lines[row]) - 1
+
         # skip empty lines
-        while (len(lines[row]) == 0) or lines[row].isspace():
-          if len(lines) - 1 > 0 and row > 0:
-            row -= 1
-            col = max(len(lines[row]), 0)
-          else:
-            break
+        while (not lines[row] or lines[row].isspace()) and row > 0:
+          row -= 1
+
+        col = len(lines[row])
 
       # CONTROL + RIGHT (move to next word to right or edge of word, skip empty spaces, if at edge of line,
       # move to lower line)
@@ -226,11 +225,8 @@ def edit(term, lines: List[str]):
                 lines.insert(row, "")
 
         # skip empty lines
-        while (len(lines[row]) == 0) or lines[row].isspace():
-          if len(lines) - 1 > row:
-            row += 1
-          else:
-            break
+        while (not lines[row] or lines[row].isspace()) and row < len(lines) - 1:
+          row += 1
 
       elif key == 'UP':
         # supports going UP in wrapped lines correctly
