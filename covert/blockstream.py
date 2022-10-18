@@ -37,6 +37,7 @@ class BlockStream:
     self.nonce = None
     self.workers = 8
     self.executor = ThreadPoolExecutor(max_workers=self.workers)
+    self.header = None
     self.blkhash = None
     self.file = None
     self.ciphertext = None
