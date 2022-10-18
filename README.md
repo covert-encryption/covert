@@ -78,7 +78,7 @@ Covert comes with a graphical user interface built in. Unlike PGP GUIs, Covert d
 ## Additional reading
 
 * [Covert Format Specification](https://github.com/covert-encryption/covert/blob/main/docs/Specification.md)
-* [Covert Encryption Security](https://github.com/covert-encryption/covert/blob/main/docs/Security.md)
+* [Covert Security and Design Rationale](https://github.com/covert-encryption/covert/blob/main/docs/Rationale.md)
 * [Reducing Metadata Leakage](https://petsymposium.org/2019/files/papers/issue4/popets-2019-0056.pdf) (a related research paper)
 * [The PGP Problem](https://latacora.micro.blog/2019/07/16/the-pgp-problem.html)
 

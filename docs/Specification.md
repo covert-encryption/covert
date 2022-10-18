@@ -91,7 +91,7 @@ r = log(2**32) - log(rnd1 + rnd2 * 2**-32 + 2**-33)
 total_padding = fixed_padding + int(round(r * p * eff_size))
 ```
 
-There are illustrative diagrams, further discussion and comparison to PADME padding in our [Security Documentation](https://github.com/covert-encryption/covert/blob/main/docs/Security.md#random-padding).
+There are illustrative diagrams, further discussion and comparison to PADME padding in our [Rationale](https://github.com/covert-encryption/covert/blob/main/docs/Rationale.md#random-padding).
 
 
 ## Signatures
