@@ -15,8 +15,8 @@ class DecryptView(QWidget):
   def __init__(self, app, infile):
     QWidget.__init__(self)
     self.blockstream = BlockStream()
-    self.blockstream.decrypt_init(infile)
-
+    self.decrypt_ctx = self.blockstream.decrypt_init(infile)
+    self.decrypt_ctx.__enter__()
     self.setMinimumWidth(535)
     self.app = app
     self.init_keyinput()
