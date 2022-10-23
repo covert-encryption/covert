@@ -115,7 +115,7 @@ def read_pk_file(keystr: str) -> list[Key]:
     with urlopen(url) as resp:  # nosec
       data = resp.read()
   elif not os.path.isfile(keystr):
-    raise ValueError("Keyfile {keystr} not found")
+    raise ValueError(f"Keyfile {keystr} not found")
   else:
     with open(keystr, "rb") as f:
       data = f.read()
