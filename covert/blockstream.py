@@ -4,7 +4,6 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, suppress
 from hashlib import sha512
-from secrets import token_bytes
 
 from covert import chacha, pubkey, ratchet
 from covert.cryptoheader import Header, encrypt_header
@@ -260,7 +259,7 @@ def encrypt_file(auth, blockinput, a):
   a.filehash = blkhash
   # Add signature blocks
   for key in identities:
-    signature = xed_sign(key.sk, blkhash, token_bytes(64))
+    signature = xed_sign(key.sk, blkhash, blkhash)  # blkhash is both the message and the nonce
     nsig = sha512(blkhash + key.pk).digest()[:12]
     ksig = blkhash[:32]
     yield chacha.encrypt(signature, None, nsig, ksig)
